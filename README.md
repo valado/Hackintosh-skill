@@ -1,4 +1,6 @@
-# Hackintosh-skill · v0.2.10
+# Hackintosh-skill · v0.2.12
+
+本版优先使用 1401 自动构建 EFI，RapidEFI 作为备用；安装前说明哪些功能需要装完系统后继续修复。仍处测试阶段，详见下方测试声明与验证范围。
 
 你可以在一台电脑上和 AI 助手聊天，让它帮你在另一台 Windows 电脑上检查硬件、准备安装 U 盘，再安装 macOS。默认保留 Windows。
 
@@ -41,13 +43,13 @@
 
 第一轮会先介绍两台电脑的分工，再给一段完整命令。你在 A 粘贴运行一次，把结果发回 B。助手核对连接后，就可以自动检查硬件。已有受控任务会按保存的进度继续。
 
-想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.10 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.10.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
+想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.12 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.12.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
 
 ## 给 Agent 的入口说明
 
 在 B 取得仓库快照并记录分支和完整提交号。已有目录先检查来源与本地变更。没有 git 就取得对应提交的源码归档。用户提供完整离线包时，记录包版本和 SHA256。安装期间固定同一份源码。运行前审阅脚本。只有网页读取权限时进入人工指导模式并说明当前能力。
 
-执行路线面向支持 UEFI 启动的 x86-64 PC。阶段 03 会先让你选择 **a · RapidEFI-Tool 生成后适配（推荐）／b · 寻找相似配置后适配／c · AI 按官方模板生成**，再制作 EFI。有桌面控制能力时由助手自动操作 RapidEFI，按实际桌面或成功提示路径取回产物。安装 EFI 默认展开恢复等辅助项；若开机只有 Windows，可按空格展开隐藏项。阶段 00 由控制器在 B 验证连接，01～08 按阶段要求和现场证据审核。[流程控制器](macos-remote-install/references/00-controller.md)
+执行路线面向支持 UEFI 启动的 x86-64 PC。阶段 03 会先让你选择 **1 · 1401（首选推荐）／2 · RapidEFI-Tool（备用）／3 · 相似配置／4 · AI 自行配置（前三种均不可用时）**，再制作 EFI。1401 下载失败先排查网络并寻找可核验的镜像／加速，仍不可用再请你选备用路线。EFI 做好后会提示需要装完 macOS 再修的功能，并带入硬件检查清单。1401 提供免点击 CLI，详见 [1401 路线](macos-remote-install/references/12-1401.md)。有桌面控制能力时由助手自动操作 RapidEFI，按实际桌面或成功提示路径取回产物。安装 EFI 默认展开恢复等辅助项；若开机只有 Windows，可按空格展开隐藏项。阶段 00 由控制器在 B 验证连接，01～08 按阶段要求和现场证据审核。[流程控制器](macos-remote-install/references/00-controller.md)
 
 ## 包含什么
 
@@ -56,11 +58,13 @@
 | [macos-remote-install/SKILL.md](macos-remote-install/SKILL.md) | 跨 Agent 的精简技能入口，按阶段加载资料 |
 | [AI-GUIDE.md](AI-GUIDE.md) | 从相同内容合成的单文件指南，适合直接附给 Agent |
 | [START-HERE.md](START-HERE.md) | 第一次启动、离线读取及 WorkBuddy 使用方式 |
-| [WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.10.zip) | 下载 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
+| [WorkBuddy 适配包](downloads/) | 本地构建的 ZIP，供支持本地技能导入的 WorkBuddy 客户端使用 |
 | [references](macos-remote-install/references/) | SSH、兼容性、备份分区、EFI、安装、驱动、排错、续接 |
 | [流程规范与调用方式](macos-remote-install/references/00-controller.md) | 固定输入输出、错误恢复、断点续接与合同审核 |
 | [恢复界面安装步骤](macos-remote-install/references/05-boot-handoff.md) | Agent 填好目标后交付：抹掉、安装、重启选择、初始化 |
 | [安装后设备验收](macos-remote-install/references/06-postinstall.md) | Metal 计算回读、双网卡、Wi-Fi／蓝牙和下一项操作 |
+| [安装前的功能说明](macos-remote-install/references/13-install-expectations.md) | 区分安装必需能力与后置驱动，避免遗漏后续修复 |
+| [1401 免点击生成](macos-remote-install/references/12-1401.md) | Windows 命令行采集、规划、构建与独立校验 |
 | [安装后固定合同](macos-remote-install/references/11-postinstall-contract.md) | 全机问题清单、修复顺序、阶段门槛与硬盘固件启动项 |
 | [现成方案优先手册](macos-remote-install/references/10-existing-solutions.md) | 给 Agent 的查找、选用、审计与交接步骤 |
 | [EFI 决策与排错](macos-remote-install/references/09-efi-diagnostics.md) | 起点选择、有效配置审计、基线比较与有限试验，避免无依据堆补丁 |

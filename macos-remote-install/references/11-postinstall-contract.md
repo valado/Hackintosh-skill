@@ -1,5 +1,7 @@
 # 进入桌面后的固定顺序与证据合同
 
+安装前已告知的后置驱动从 `state.install_expectations.items` 原样带入硬件 ID／类别／稳定 ID；`record-devices` 会拦截漏项或改成其他设备的清单。继续补齐全机检查，不能只检查这几项。
+
 此页在阶段 05 接通 macOS 后读取，与 [06 功能测试方法](06-postinstall.md) 配合。命令在 B 执行，采集器在 A 执行。这里的 JSON、证据路径和控制器错误码留给 Agent；人类只看简短的进度和问题表。
 
 ## 顺序不可跳过
@@ -56,6 +58,7 @@
 | `macos_inventory`, `coverage_review` | 此轮采集索引和逐件覆盖对照文件；记录采集失败的处理 |
 | `presented` | 已向用户展示问题清单的交接记录（不是尚未发送的草稿） |
 | `rollback` | 当前可用 EFI、系统卷驱动的卸载／回退方式与备用连接记录 |
+| `recovery_plan` | 开始驱动修复前填写 `device-recovery-v1` 文件路径，见下方；初次只读扫描可暂缺 |
 | `tested_config`, `tested_efi_manifest` | 此轮验收所用 EFI 配置、全 EFI 文件哈希清单 |
 | `items` | 全机设备／功能行，必须覆盖以上十类 |
 
@@ -85,6 +88,39 @@ python scripts/workflow.py --run "任务目录" --json status
 ```
 
 `device_queue.next_item` 指出下一项，优先网络／GPU；等待用户和暂时无解项后置。整个清单仍开放时不能进入 07。逐项修复仍使用原 `select-source → problem/diagnose → repair-result`（实际故障需要诊断时），再登记新清单。phase 06 review 保留 `source_plans`、各项合同证据；`device_audit` 检查指向最新已登记清单。无须为了登记清单改动 A。
+
+## 驱动修改前的恢复记录
+
+先执行 [06 的恢复准备与人类交接](06-postinstall.md)，再在**新清单文件**中填写 `recovery_plan` 并 `record-devices`。初次只读扫描、查社区资料不受影响；06 的 `select-source`、`repairing` 或 `repair_attempted=true` 要求记录已经完整登记。仅改 stage 状态不能代替备份。控制器校验文件存在、哈希绑定和结构；备份可启动、恢复方法适用、通知确已展示仍需 Agent 根据实际证据核对。
+
+```json
+{
+  "schema": "device-recovery-v1", "machine_uuid": "本任务 A UUID",
+  "scope": "efi",
+  "windows": {
+    "user": "之前核验的 Windows 账户", "port": 22,
+    "host_key": "阶段 00 实测的 Windows SHA256 指纹，不是 macOS 指纹",
+    "boot_entry": "Windows Boot Manager",
+    "connection_evidence": "evidence/windows-ssh-verification.json",
+    "boot_evidence": "evidence/windows-independent-boot.txt"
+  },
+  "booted_efi": {
+    "disk_id": "本次实际启动盘的稳定身份", "partition_id": "对应 ESP 或介质分区身份",
+    "loader_path": "实际启动 EFI 路径", "source_evidence": "evidence/active-efi.json"
+  },
+  "backup": {
+    "archive": "backups/working-efi-before-driver.zip",
+    "manifest": "backups/working-efi-hashes.json",
+    "restore_check": "evidence/backup-restore-check.txt"
+  },
+  "rescue_boot": "evidence/rescue-route.txt",
+  "user_notice": "evidence/recovery-card-presented.txt"
+}
+```
+
+`scope` 按真实修改填写 `efi/system/both`；涉及系统文件或根补丁时还必须填 `system_rollback`，指向维护者支持的具体恢复方法、材料、原版本备份和验证记录。不得因缺方法把 scope 假填成 efi。所有证据和备份路径在 B 的私有 run 内，不能只指向即将损坏的 A；指纹不是密码，凭据另存不写入此记录。
+
+每次改动前按当前已知可用状态更新新记录；更换实际启动介质、备份、连接身份或补丁范围后重新登记，不能修改已入账文件。故障回 Windows 只切连接端点，保留阶段 06；不要调用用于新建 Windows 接入的 `recheck/recover/init` 把安装状态重置。恢复后继续原设备清单。
 
 ## 硬盘引导必须是一次完整交接
 
@@ -121,6 +157,6 @@ python scripts/workflow.py --run "任务目录" --json boot-ready --file "任务
 
 ## 旧任务升级
 
-已登记源码的旧任务用 `upgrade`。05/06 保留当前位置；旧版 07/08 回到 06 补验，旧审查存历史，磁盘实际内容不回滚、不格式化、已有有效实测可复用。完成新清单后再核对已有硬盘引导并补齐 07 证据，不要求无意义地重复安装或写盘。
+已登记源码的旧任务用 `upgrade`。05/06 保留当前位置；v0.2.9 及更早的 07/08 回到 06 补验，旧审查存历史，磁盘实际内容不回滚、不格式化、已有有效实测可复用。v0.2.10 已有清单与启动项门槛，升级保持原阶段，不为新增可选工具而重做安装。06 仍需修改驱动时，按当前可用状态补齐恢复记录；不虚构历史上已经展示过恢复卡。完成新清单后再核对已有硬盘引导并补齐 07 证据，不要求无意义地重复安装或写盘。
 
 控制器核对覆盖、状态、证据字节和配置关系，不能证明日志内容诚实或阻止 Agent 绕过工具直接操作。完整实机结果仍需本轮测试。

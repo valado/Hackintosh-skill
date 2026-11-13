@@ -4,17 +4,31 @@
 
 ## 选哪条路
 
-**新建安装 EFI 时，先给用户三个选项，再开始制作。** 控制器在 03 返回 `next_action=choose-efi`，按原样展示；用户已在当前对话明确选择时直接登记，不能让用户再选一次。
+**新建安装 EFI 时，先给用户四个选项，再开始制作。** 控制器在 03 返回 `next_action=choose-efi`，按原样展示；用户已在当前对话明确选择时直接登记，不能让用户再选一次。
 
 | 选项 | 向用户说明 | Agent 的下一步 |
 |---|---|---|
-| **a · RapidEFI-Tool（推荐）** | 先用开源工具生成，再按本机情况调整 | 执行 `choose-efi --choice a`，锁定 RapidEFI 版本，按下方固定流程导出原始 EFI |
-| **b · 寻找相似配置** | AI 查找相近机型的成功配置，核对差异后修改 | 执行 `choose-efi --choice b`，登记可复核的案例为 `recipe`，独立处理本机身份、ACPI 与 USB 映射 |
-| **c · AI 生成** | AI 按官方模板和真实硬件资料逐项生成，需要更多核对 | 执行 `choose-efi --choice c`，从锁定 OpenCorePkg 的 `Docs/Sample.plist` 建立；来源登记为官方 `recipe` |
+| **1 · 1401（首选推荐）** | 自动采集、规划、生成与审计，无需点击 | `choose-efi --choice 1`，按 [1401 固定调用流程](12-1401.md) 执行 |
+| **2 · RapidEFI-Tool（备用）** | 用图形工具生成，再按本机调整 | `choose-efi --choice 2`，自动操作可见窗口，从实际运行账户桌面取回产物 |
+| **3 · 相似配置** | 查找有实测记录的相近配置，再核对本机差异 | `choose-efi --choice 3`，登记案例 `recipe`，独立处理身份、ACPI 和 USB |
+| **4 · AI 自行配置（最后回退）** | 前三种均已证实不可用后，才从官方模板配置 | 先补齐下方 `fallback_checks`，再 `choose-efi --choice 4` 与来源登记 |
 
-这三个选项都要保存原始配置并通过 ACPI、ocvalidate、EFI 审计和介质回读检查。已有同机成功 EFI 一并留作排错对照；未经用户选择，不用它悄悄替换本轮路线。选定路线确实不可用时，说明原因和可选替代路线，再让用户改选。
+用户回答“默认／按推荐”就是选择 1；已有明确选择直接登记。对人始终按 1、2、3、4 展示。为兼容旧记录，内部 ID 保持 **1→d、2→a、3→b、4→c**，旧任务中的 a 仍是 RapidEFI，不能重新解释为 1401。
 
-下面的默认来源优先级用于未指定路线的硬件修复与旧任务。新建 EFI 按 a／b／c 的明确选择执行，不要求选择 b／c 的用户先假称两套生成器都已核查失败。
+四条路线都保留原始配置并核对真实 ACPI、ocvalidate、EFI 审计和介质回读。适用的同机成功 EFI 一并留作对照。生成器已有可复用审计产物时核验其版本、输入和结论，不要求 AI 重新手写一遍；最终实际部署的副本仍要检查。
+
+### 1401 下载失败：先修取件，再换路线
+
+下载失败不等于项目不支持这台电脑，也不等于项目已下架。按以下顺序有限排查，记录实际结果：
+
+1. 检查原仓库、锁定发行资产及其跳转地址的 DNS、TLS、HTTP 状态。区分超时／证书问题、限流、包名或版本错误、真实不存在。
+2. 检查 A、B 哪台可取件，尝试已有获授权的代理或 B 下载后经 SFTP 中转；不要把两台机器的联网能力混为一谈。
+3. 搜索维护者提供的备用下载、可信镜像／GitHub 加速入口及可核验的缓存或离线包。固定同一版本／提交，确认完整文件和来源。第三方镜像必须能用独立可信的作者哈希、有效签名或已验证副本核对；仅对镜像文件计算 SHA256 不能证明来源。没有可信校验就不用该镜像，不关闭 TLS，也不把凭据放进加速 URL。
+4. 全部无法取得时简短告知“1401 暂时无法下载”，请用户在 **2 · RapidEFI** 与 **3 · 相似配置** 中选择；不能直接手写 EFI。用户也可提供可信离线包。已取得包但构建失败，先读错误和上游修复，再判断该路线是否确实不可用。
+
+选择 4 不会免除前三条路线的核查。阶段 03 的 source JSON 顶层必须含三行 `fallback_checks`，`route` 分别为 d、a、b；每行包含 `outcome: unavailable`、`basis`（`network/incompatible/generation-failed/no-suitable-source`）、非空 `reason`、run 内 `evidence`。因网络排除时另有 `network_checks`，三个字段 `origin/alternate_host/mirror_search` 均指向实际检查记录。找不到可信镜像的搜索结果也应记录，而不是填“已检查”占位。控制器缺项就拒绝登记手工路线；记录仍需 Agent 诚实采集，不能伪造失败。
+
+没有先选路线的旧任务和安装后硬件修复，继续按以下来源顺序：
 
 1. 先查同一台机器、同阶段的成功产物，找出对应的启动或功能实测。比对主板、BIOS、硬件 ID、显示接线、系统 build、架构和用途。若相符，保存原始副本作为基线；若改变，写明差异。
 2. 缺少适用基线时查维护者的工具、驱动项目或已落地的上游修复。固定 tag、提交或可识别的发行版本，保存一份有关键支持条件的来源摘录或日志。按准确板型／设备 ID、macOS build、架构与症状查发布说明、设备匹配表、issue、关联 PR 和 CI 产物。核对某项修复是否已进入**准备使用的那个二进制**。工具网页和包下载失败时按 [下载与中转](04-installer.md) 处理。
@@ -22,7 +36,7 @@
 
 | 问题 | 首查的实际入口 | Agent 要取回的东西 |
 |---|---|---|
-| 新建安装 EFI | [RapidEFI](https://github.com/JeoJay127/RapidEFI-Tool) 的自动配置或 [OpCore Simplify](https://github.com/lzhoang2801/OpCore-Simplify) 的硬件报告工作流 | A 的报告、原始 ACPI、生成器版本、未修改的 EFI 及配置。RapidEFI 如导出 configModel 一并保留。 |
+| 新建安装 EFI | [1401 命令行（首选）](12-1401.md)、[RapidEFI 自动配置（备用）](https://github.com/JeoJay127/RapidEFI-Tool) 或 [OpCore Simplify](https://github.com/lzhoang2801/OpCore-Simplify) 的硬件报告工作流 | A 的报告、原始 ACPI、生成器版本、未修改的 EFI 及配置。RapidEFI 如导出 configModel 一并保留。 |
 | ACPI、USB | [SSDTTime](https://github.com/corpnewt/SSDTTime)、[USBToolBox](https://github.com/USBToolBox/tool) | 从 A 原始表生成的 AML 和配套重命名、实际插孔的发现记录及映射。分别核对作用域、匹配和启用状态。 |
 | GPU、有线、无线或音频 | 用下方 lookup 按问题找原项目，再按设备 ID 深查。工具目录可补充其他已维护分支及作者给出的具体修复。 | 锁定的驱动、依赖、证据、回退包；最终包与实际加载位置都要核对。 |
 
@@ -65,11 +79,11 @@ python scripts/workflow.py --run "<run>" --json select-source --file "<run>/evid
 
 模板的 `target` 用稳定设备 ID，EFI 用固定的板型与用途。`environment` 写明目标 macOS／架构及相关固件条件。`hardware_evidence` 指向本轮原始硬件／故障采集。每个候选有三个状态，`unchecked` 表示待确认，`excluded` 表示已经核查并记录排除依据，`usable` 表示匹配。Agent 对已核查项填 `fit` 和 `evidence`；命中项另填不可随分支移动的 `revision`，如 release tag、完整提交、带哈希的文档或基线快照标识。来源文件与硬件文件使用 run 内的相对路径。新增项目按相同格式提供原作者 HTTPS 来源，内置目录可以扩展。
 
-未指定 EFI 路线的旧任务和硬件修复仍按 `baseline → project → recipe`；EFI 的旧式模板回退需要记录两种已列生成器的核查结果。新任务先 `choose-efi --choice a|b|c`，预查来源时 `solutions.py check` 同时传 `--efi-route a|b|c`，控制器会按已登记的选择核对来源。选 b 使用实际案例 recipe，选 c 使用 OpenCorePkg 官方模板 recipe，不能登记成 RapidEFI 生成。工具检查顺序和文件字节，来源适配及实际结果仍须核验。没有适用来源时保留记录并交接，不用改版本号或改写报告充当新证据。
+未指定 EFI 路线的旧任务和硬件修复仍按 `baseline → project → recipe`；EFI 的旧式模板回退需要记录所有已列生成器的核查结果。新任务先 `choose-efi --choice 1|2|3|4`（内部 ID 对应 d/a/b/c），预查来源时 `solutions.py check` 同时传 `--efi-route a|b|c|d`，控制器会按已登记的选择核对来源。选 b 使用实际案例 recipe，选 c 使用 OpenCorePkg 官方模板 recipe，不能登记成 RapidEFI 生成。工具检查顺序和文件字节，来源适配及实际结果仍须核验。没有适用来源时保留记录并交接，不用改版本号或改写报告充当新证据。
 
 ## 原始产物和阶段报告
 
-- **03-media** 选定来源后再构建。先在选中行填好 `base_config`，指向原始基线、生成器实际导出的或官方 Sample 的 plist 在 run 中的预定位置。保留它的原始字节，在新目录复制并适配。用 [EFI 比较](09-efi-diagnostics.md) 记录原始配置到本机候选的差异，按硬件依据只改必要内容。同版本 ocvalidate、原始 ACPI 审核、写后回读及原有确认照常执行。在已有 review JSON 顶层加 `"source_plan": "evidence/attempt-01/source.json"`。没有来源登记或没有合格的原始 plist 时，控制器拦住 03 验收。
+- **03-media** 选定来源后再构建。先在选中行填好 `base_config`，指向原始基线、生成器实际导出的或官方 Sample 的 plist 在 run 中的预定位置。保留它的原始字节，在新目录复制并适配。用 [EFI 比较](09-efi-diagnostics.md) 记录原始配置到本机候选的差异，按硬件依据只改必要内容。同版本 ocvalidate、原始 ACPI 审核、写后回读及原有确认照常执行。在已有 review JSON 顶层加 `"source_plan": "evidence/attempt-01/source.json"`。没有来源登记或没有合格的原始 plist 时，控制器拦住 03 验收。交付重启安装前，按 [安装能力告知](13-install-expectations.md) 登记哪些功能需在阶段 06 修复；缺少该告知也不能通过。
 - **03、04、06 的故障修改** 先按当前阶段登记来源，再在既有 diagnose JSON 顶层填 `source_plan`，其 `target` 与来源记录一致。保留不变的基线、最小差异、可观察的预期和可执行的回退。每项设备各自跟踪。
 - **06-devices** 用户新报告只需描述实测。Agent 在 review 顶层填 `source_plans` 数组，列出本阶段实施修复及回滚所用的各项记录。若全阶段只盘点和测试，给空数组并用 `no_driver_changes` 写明情况。没有效果、需要插拔或等待授权的设备保留待办，先做下一件，沿用日常交接卡。
 

@@ -45,3 +45,5 @@ Realtek／其他网卡的实验分支会变化，因此本包不把某个 fork �
 2026-11-05 对照 [OpenCore 官方配置规范](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex) 的 LauncherOption、LauncherPath、RequestBootVarRouting 与 ShowPicker：固件登记发生于加载器执行，Boot 变量可能被重定向。首次硬盘启动不能仅以配置键或复制成功验收；配合 [LauncherOption 指引](https://dortania.github.io/OpenCore-Post-Install/multiboot/bootstrap.html) 核对本次使用版本与实际固件。
 
 2026-11-05 核对的 RapidEFI GUI 顺序和 Windows 默认桌面路径，依据 [RapidEFI 快速开始](https://github.com/JeoJay127/RapidEFI-Tool#快速开始)、[文件输出实现](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/utils/file_util.dart) 与 [应用启动入口](https://github.com/JeoJay127/RapidEFI-Tool/blob/main/lib/main.dart)。OpenCore 的恢复项辅助分类和空格展开依据 [官方 Configuration.tex 中 HideAuxiliary](https://github.com/acidanthera/OpenCorePkg/blob/master/Docs/Configuration.tex)。执行时仍固定所用版本并核对实际界面。
+
+2026-11-13 核对 [1401 固定提交](https://github.com/nullmoth/1401/tree/03c79ef772f6142d59eb5203ce0efa98845bd0ba) 的 CLI、采集器和引擎；参数、许可、测试范围及原作者链接见 [12-1401](12-1401.md)。没有将 CLI 帮助或本地测试当成 A 的启动验证。

@@ -13,11 +13,11 @@ SKILL = ROOT / "macos-remote-install"
 sys.path.insert(0, str(SKILL / "scripts"))
 from agentkit import no_link, sha
 
-VERSION = "0.2.10"
+VERSION = "0.2.12"
 if json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))["version"] != VERSION:
     raise ValueError("Workflow version must match the package version")
 REF_NAMES = ["00-controller", "01-remote-access", "02-hardware-routing", "03-storage", "04-installer",
-             "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools", "09-efi-diagnostics", "10-existing-solutions", "11-postinstall-contract",
+             "05-boot-handoff", "06-postinstall", "07-troubleshooting", "08-state-and-tools", "09-efi-diagnostics", "10-existing-solutions", "11-postinstall-contract", "12-1401", "13-install-expectations",
              "case-14700k-4070ti-super", "sources"]
 SOURCE_DOCS = [SKILL / "SKILL.md"] + [SKILL / "references" / (name + ".md") for name in REF_NAMES]
 TOP_FILES = ["README.md", "START-HERE.md", "新手对话预览.md", "AI-GUIDE.md", "LICENSE", ".gitignore", ".gitattributes",

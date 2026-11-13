@@ -36,6 +36,14 @@ def device_fixture(run, machine):
             'windows_inventory': 'inventory/windows.json', 'tested_config': 'evidence/tested.plist'}
     for key in ('macos_inventory', 'coverage_review', 'presented', 'rollback', 'tested_efi_manifest'):
         data[key] = 'evidence/fixture.txt'
+    ref = 'evidence/fixture.txt'
+    recovery = {'schema':'device-recovery-v1','machine_uuid':machine['uuid'],'scope':'efi',
+        'windows':{'user':'fixture-user','port':22,'host_key':'SHA256:'+'A'*43,
+                   'boot_entry':'Windows Boot Manager','connection_evidence':ref,'boot_evidence':ref},
+        'booted_efi':{'disk_id':'fixture-usb','partition_id':ESP,'loader_path':'EFI/OC/OpenCore.efi','source_evidence':ref},
+        'backup':{'archive':ref,'manifest':ref,'restore_check':ref},'rescue_boot':ref,'user_notice':ref}
+    put(run,'evidence/recovery.json',recovery)
+    data['recovery_plan']='evidence/recovery.json'
     data['items'] = []
     for kind in guard.CATEGORIES[:-1]:
         for number in range(2 if kind == 'network' else 1):
@@ -89,11 +97,69 @@ class PostInstallTests(unittest.TestCase):
         flow.record_devices(self.run, self.state, self.save_devices())
         flow.guided_review(self.run, self.state, put(self.run, 'review06.json', self.review()))
 
+    def test_declared_postinstall_device_cannot_disappear_or_change_identity(self):
+        declared=copy.deepcopy(self.data['items'][0])
+        self.state['install_expectations']={'items':[declared],'proofs':[guard.proof(self.run,'evidence/fixture.txt','TEST')]}
+        flow.record_devices(self.run,self.state,self.save_devices())
+        for key,value in [('id','renamed-away'),('hardware_id','different-card')]:
+            altered=copy.deepcopy(self.data);altered['items'][0][key]=value
+            with self.subTest(key=key),self.assertRaises(Fault):
+                flow.record_devices(self.run,self.state,self.save_devices(altered,'altered.json'))
+
+    def test_changed_install_notice_blocks_device_registration(self):
+        self.state['install_expectations']={'items':[], 'proofs':[guard.proof(self.run,'evidence/fixture.txt','TEST')]}
+        put(self.run,'evidence/fixture.txt',b'changed installation notice')
+        with self.assertRaises(Fault) as error: flow.record_devices(self.run,self.state,self.save_devices())
+        self.assertEqual(error.exception.code,'EVIDENCE_CHANGED')
+
     def test_ssh_success_routes_to_scan_not_esp(self):
         self.state.update(phase='05-macos-remote')
         flow.guided_review(self.run, self.state, put(self.run, 'review05.json', self.review()))
         self.assertEqual(self.state['phase'], '06-devices')
         self.assertEqual(flow.render_result(self.state)['next_action'], 'record-devices')
+        self.assertIn('Windows Boot Manager',flow.render_result(self.state)['display'])
+
+    def test_readonly_scan_without_recovery_allowed_but_repair_requires_it(self):
+        self.data.pop('recovery_plan')
+        self.data['items'][0].update(status='pending',next_action='read upstream docs')
+        flow.record_devices(self.run,self.state,self.save_devices())
+        self.assertEqual(self.state['phase'],'06-devices')
+        self.assertIn('Windows Boot Manager',flow.render_result(self.state)['display'])
+        with self.assertRaises(Fault) as err:
+            flow.select_source(self.run,self.state,self.run/'not-yet-needed.json')
+        self.assertEqual(err.exception.code,'DEVICE_RECOVERY_REQUIRED')
+        for changes in ({'status':'repairing'},{'repair_attempted':True}):
+            d=copy.deepcopy(self.data);d['items'][0].update(changes)
+            with self.assertRaises(Fault) as err:
+                flow.record_devices(self.run,self.state,self.save_devices(d,'attempt.json'))
+            self.assertEqual(err.exception.code,'DEVICE_RECOVERY_REQUIRED')
+        self.assertEqual(self.state['phase'],'06-devices')
+
+    def test_system_patch_requires_system_rollback_and_windows_identity(self):
+        rec=json.loads((self.run/self.data['recovery_plan']).read_text())
+        for key in ('user','host_key','boot_evidence'):
+            bad=copy.deepcopy(rec);bad['windows'].pop(key)
+            put(self.run,'evidence/bad-recovery.json',bad)
+            with self.assertRaises(Fault): guard.check_recovery(self.run,MACHINE,'evidence/bad-recovery.json')
+        rec['scope']='both'
+        put(self.run,'evidence/bad-recovery.json',rec)
+        with self.assertRaises(Fault) as err:
+            guard.check_recovery(self.run,MACHINE,'evidence/bad-recovery.json')
+        self.assertEqual(err.exception.code,'DEVICE_RECOVERY_REQUIRED')
+        rec['system_rollback']='evidence/fixture.txt'
+        put(self.run,'evidence/complete-recovery.json',rec)
+        checked,_=guard.check_recovery(self.run,MACHINE,'evidence/complete-recovery.json')
+        self.assertEqual(checked['scope'],'both')
+
+    def test_recovery_for_wrong_machine_or_changed_backup_is_rejected(self):
+        rec=json.loads((self.run/self.data['recovery_plan']).read_text())
+        rec['machine_uuid']='another-machine'
+        put(self.run,'evidence/other-recovery.json',rec)
+        with self.assertRaises(Fault): guard.check_recovery(self.run,MACHINE,'evidence/other-recovery.json')
+        flow.record_devices(self.run,self.state,self.save_devices())
+        put(self.run,'evidence/fixture.txt',b'changed backup after registration')
+        with self.assertRaises(Fault) as err: flow.device_record(self.run,self.state)
+        self.assertEqual(err.exception.code,'EVIDENCE_CHANGED')
 
     def test_cli_records_scan_and_renders_priority_from_persisted_state(self):
         for item in self.data['items'][:3]:
@@ -222,6 +288,27 @@ class PostInstallTests(unittest.TestCase):
         backup=flow.read_json(self.run/self.state['upgrades'][-1]['backup']['path'])
         self.assertEqual(backup['phase'],'07-boot')
         self.assertEqual(backup['sources'],profile['sources'])
+
+    def test_v0211_upgrade_keeps_selected_rapidefi_route(self):
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.11']
+        self.state.update(phase='03-media')
+        flow.choose_efi(self.run,self.state,'a')
+        self.state.update(version='0.2.11',sources=copy.deepcopy(profile['sources']))
+        flow.save(self.run,self.state,'synthetic-v0211')
+        flow.upgrade(self.run,self.state)
+        self.assertEqual(self.state['phase'],'03-media')
+        self.assertEqual(flow.efi_choice(self.run,self.state),'a')
+        self.assertIn('RapidEFI',flow.EFI_CHOICES['a'])
+
+    def test_v0210_upgrade_keeps_already_gated_boot_phase(self):
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.10']
+        self.state.update(version='0.2.10',sources=copy.deepcopy(profile['sources']),phase='07-boot')
+        flow.save(self.run,self.state,'synthetic-v0210')
+        flow.upgrade(self.run,self.state)
+        self.assertEqual(self.state['phase'],'07-boot')
+        self.assertEqual(self.state['version'],flow.VERSION)
+        backup=flow.read_json(self.run/self.state['upgrades'][-1]['backup']['path'])
+        self.assertEqual(backup['version'],'0.2.10')
 
 
 if __name__ == '__main__': unittest.main()

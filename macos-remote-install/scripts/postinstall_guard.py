@@ -9,6 +9,7 @@ import uuid
 
 from agentkit import confined, read_json, sha
 from ssh_transport import Fault
+from urllib.parse import urlsplit
 
 CATEGORIES = ('network', 'gpu', 'wifi', 'bluetooth', 'usb', 'audio', 'storage',
               'cpu-power', 'sleep', 'continuity', 'other')
@@ -49,6 +50,66 @@ def read_manifest(run, path, schema, machine, code):
     return value, [ref]
 
 
+def check_recovery(run, machine, path):
+    """A local evidence contract, not a claim that backups have been boot-tested."""
+    code = 'DEVICE_RECOVERY_REQUIRED'
+    data, proofs = read_manifest(run, path, 'device-recovery-v1', machine, code)
+    need(data.get('scope') in ('efi', 'system', 'both'), code, 'repair scope required')
+    windows = data.get('windows', {})
+    need(isinstance(windows, dict) and text(windows.get('user'))
+         and type(windows.get('port')) is int and 1 <= windows['port'] <= 65535
+         and re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}=?', str(windows.get('host_key', '')))
+         and text(windows.get('boot_entry')), code, 'saved Windows identity and boot entry required')
+    for key in ('connection_evidence', 'boot_evidence'):
+        proofs.append(proof(run, windows.get(key), code))
+    boot = data.get('booted_efi', {})
+    need(isinstance(boot, dict) and all(text(boot.get(k)) for k in ('disk_id','partition_id','loader_path')),
+         code, 'identify actual booted EFI, not a drive letter')
+    proofs.append(proof(run, boot.get('source_evidence'), code))
+    backup = data.get('backup', {})
+    need(isinstance(backup, dict), code, 'backup object required')
+    for key in ('archive', 'manifest', 'restore_check'):
+        proofs.append(proof(run, backup.get(key), code))
+    for key in ('rescue_boot', 'user_notice'):
+        proofs.append(proof(run, data.get(key), code))
+    if data['scope'] != 'efi':
+        proofs.append(proof(run, data.get('system_rollback'), code))
+    return data, proofs
+
+
+def check_install_expectations(run, machine, path, config_path):
+    """Separate install readiness from planned post-install repairs before handoff."""
+    code = 'INSTALL_EXPECTATIONS_REQUIRED'
+    data, proofs = read_manifest(run, path, 'install-expectations-v1', machine, code)
+    config = proof(run, data.get('config'), code)
+    actual = proof(run, config_path, code)
+    need(config['sha256'] == actual['sha256'], code, 'notice is for a different installation config')
+    proofs.extend([config, actual])
+    for field in ('assessment','presented','install_network','install_display','install_input','install_storage'):
+        proofs.append(proof(run, data.get(field), code))
+    need(data.get('blocking_items') == [], code, 'resolve installation blockers before deferring devices')
+    rows = data.get('postinstall_items')
+    need(isinstance(rows,list) and len(rows) <= 100, code, 'post-install list required (may be empty with assessment)')
+    ids = set()
+    for row in rows:
+        need(isinstance(row,dict), code, 'invalid deferred device')
+        need(all(text(row.get(k)) for k in ('id','name','hardware_id','reason','impact','next_action')),code,'explain device, reason, expected impact and next action')
+        need(row['id'] not in ids and row.get('category') in CATEGORIES and row.get('defer_to') == '06-devices',code,'stable device identity and phase 06 required')
+        ids.add(row['id'])
+        url = urlsplit(str(row.get('source','')))
+        need(url.scheme == 'https' and bool(url.hostname) and not url.username and not url.password,code,'original driver/project reference required')
+        proofs.append(proof(run, row.get('evidence'), code))
+    return data, proofs
+
+
+def check_expectations_carried(data, expected):
+    rows = {row['id']: row for row in data['items']}
+    for original in expected:
+        current = rows.get(original['id'], {})
+        need(current.get('category') == original['category'] and current.get('hardware_id') == original['hardware_id'],
+             'DEVICE_AUDIT_REQUIRED', 'carry each declared post-install device into the hardware audit')
+
+
 def check_devices(run, machine, path, previous=None, closing=False):
     code = 'DEVICE_AUDIT_REQUIRED'
     data, proofs = read_manifest(run, path, 'device-audit-v1', machine, code)
@@ -75,6 +136,11 @@ def check_devices(run, machine, path, previous=None, closing=False):
             expected[key.casefold()] = 'Display'
     items = data.get('items')
     need(isinstance(items, list) and items, code, 'per-device rows required')
+    if data.get('recovery_plan'):
+        _, recovery_proofs = check_recovery(run, machine, data['recovery_plan'])
+        proofs.extend(recovery_proofs)
+    elif any(isinstance(i, dict) and (i.get('status') == 'repairing' or i.get('repair_attempted') is True) for i in items):
+        raise Fault('DEVICE_RECOVERY_REQUIRED', {'reason': 'prepare recovery before a driver change'})
     ids, categories, covered = set(), set(), set()
     for item in items:
         need(isinstance(item, dict), code, 'invalid device row')

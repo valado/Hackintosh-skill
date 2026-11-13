@@ -17,9 +17,9 @@ from prepare_ssh_handoff import render, SOURCE
 from ssh_transport import Fault, parse_packet, verify_connection, credential_from_bundle
 from acpi_guard import check_acpi_evidence
 from solutions import assess as assess_solution
-from postinstall_guard import check_devices, device_queue, check_boot
+from postinstall_guard import check_devices, device_queue, check_boot, check_recovery, check_install_expectations, check_expectations_carried
 
-VERSION = '0.2.10'
+VERSION = '0.2.12'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
@@ -29,11 +29,13 @@ TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
+    'INSTALL_EXPECTATIONS_REQUIRED': ('EFI 已制作，但安装前的功能说明还没完整核对。','我会区分安装必需项和装完后再修的项目，告知预期现象并带入硬件清单。','暂时无需操作；若缺少唯一安装网口等必要条件，我会说明替代办法。','review'),
+    'DEVICE_RECOVERY_REQUIRED': ('硬件检查可继续，修改驱动前还需备好恢复办法。','我会保存可启动 EFI，核对 Windows 远程入口与这次修改的回滚方法。','若重启后进不去 macOS，从主板启动菜单选 Windows Boot Manager；发回卡住的照片和 Windows 当前 IP。','record-devices'),
     'DEVICE_AUDIT_REQUIRED': ('还没完成本轮全机检查清单。','我会对照安装前的硬件，补查每件设备和系统功能。','暂时无需操作。','record-devices'),
     'DEVICE_AUDIT_OPEN': ('硬件清单还有待处理或待测项。','我会继续可做的修复，再集中交代仍受限的项目；暂不写入硬盘引导。','需要现场测试或接受限制时，我会一起说明。','record-devices'),
     'BOOT_REGISTRATION_REQUIRED': ('硬盘引导的启动项还没核验完整。','我会核对固件中的硬盘 OpenCore 路径、启动顺序和菜单设置。','先保留 U 盘，等检查完成再拔盘重启。','boot-ready'),
     'EFI_PICKER_INVALID': ('安装 EFI 还在隐藏恢复等辅助条目。','我会在测试副本将 HideAuxiliary 设为 false，重新校验并回读 U 盘。','暂时无需操作。','review'),
-    'EFI_ROUTE_REQUIRED': ('备份与安装空间已确认，先选择 EFI 制作方式。','选定后我会按这条路线制作并检查启动文件。','回复 a、b 或 c。','choose-efi'),
+    'EFI_ROUTE_REQUIRED': ('备份与安装空间已确认，先选择 EFI 制作方式。','推荐先用 1401 自动生成；不可用时先查网络和下载路径。','回复 1、2 或 3；第 4 种只在前三种均不可用时启用。','choose-efi'),
     'SOLUTION_REQUIRED': ('还需确认现有方案适合这台电脑。','我会先核对同机成功记录，再比较工具作者提供的方案。','暂时无需操作。','select-source'),
     'SOLUTION_RETRY_LIMIT': ('同一方案在相同条件下已试过两轮。','我会保留可退回的配置，核对新的线索或整理交接，再继续可做的检查。','暂时无需操作。','select-source'),
     'PACKET_INVALID': ('收到的连接结果不完整。','我会用原始结果核对 A。','从 A 的 PowerShell 重新复制完整的 SSH_HANDOFF_V1 那一行到这里。','import'),
@@ -233,7 +235,7 @@ def upgrade(run,state):
         state['guided_reviews']=[r for r in reviews if r['phase']!='03-media']
         state.update(phase='03-media',step='guided-contract',status='planned',failure=None)
     # Old 06/07 reviews did not enforce a per-device ledger or firmware receipt.
-    if state['phase'] in ('07-boot', '08-delivery'):
+    if previous not in ('0.2.10','0.2.11') and state['phase'] in ('07-boot', '08-delivery'):
         state.setdefault('superseded_guided_reviews', []).extend(
             r for r in state.get('guided_reviews', []) if r['phase'] in ('06-devices', '07-boot', '08-delivery'))
         state['guided_reviews'] = [r for r in state.get('guided_reviews', []) if r['phase'] not in ('06-devices', '07-boot', '08-delivery')]
@@ -407,10 +409,12 @@ def recover(run, state):
 SOURCE_PHASES = ('03-media', '04-install', '06-devices')
 
 EFI_CHOICES = {
-    'a': 'RapidEFI-Tool 生成后适配（推荐）',
+    'd': '1401 命令行生成后适配（首选推荐）',
+    'a': 'RapidEFI-Tool 生成后适配（备用）',
     'b': '查找相似配置，核对差异后适配',
-    'c': 'AI 按官方 Sample 与本机资料生成',
+    'c': 'AI 按官方 Sample 配置（前三种均不可用时）',
 }
+EFI_NUMBERS = dict(zip(('1','2','3','4'), EFI_CHOICES))
 
 
 def has_efi_source(state):
@@ -426,6 +430,7 @@ def efi_choice(run, state):
 
 
 def choose_efi(run, state, choice):
+    choice = EFI_NUMBERS.get(choice, choice)
     if state['phase'] != '03-media' or state['step'] != 'guided-contract' or choice not in EFI_CHOICES:
         raise Fault('ACTION_NOT_ALLOWED')
     if efi_choice(run, state) == choice:
@@ -458,7 +463,10 @@ def select_source(run, state, plan_path):
     if state['phase'] not in SOURCE_PHASES or state['step'] == 'complete':
         raise Fault('ACTION_NOT_ALLOWED')
     if state['phase'] == '06-devices':
-        device_record(run, state)
+        devices, _ = device_record(run, state)
+        if not devices.get('recovery_plan'):
+            raise Fault('DEVICE_RECOVERY_REQUIRED')
+        check_recovery(run, state.get('machine_a'), devices['recovery_plan'])
     route = efi_choice(run, state)
     if state['phase'] == '03-media' and route is None and not has_efi_source(state):
         raise Fault('EFI_ROUTE_REQUIRED')
@@ -486,6 +494,9 @@ def selected_solution(run, state, relative, **options):
         raise Fault('SOLUTION_REQUIRED')
     for item in stored['proofs']:
         verify_evidence(run, item)
+    if state['phase'] == '06-devices':
+        devices, _ = device_record(run, state)
+        check_recovery(run, state.get('machine_a'), devices.get('recovery_plan'))
     return assess_solution(run, relative, efi_route=efi_choice(run, state), **options)
 
 
@@ -578,9 +589,15 @@ def record_devices(run, state, path):
     previous = device_record(run, state)[0] if state.get('device_audit') else None
     relative = Path(path).absolute().relative_to(run.absolute()).as_posix()
     data, proofs = check_devices(run, state.get('machine_a'), relative, previous=previous)
+    expectations = state.get('install_expectations')
+    if expectations:
+        for ref in expectations['proofs']:
+            verify_evidence(run,ref)
+        check_expectations_carried(data, expectations['items'])
     if state.get('device_audit'):
         state.setdefault('device_audit_history', []).append(state['device_audit'])
-    state['device_audit'] = {'manifest': proofs[0], 'proofs': proofs[1:], 'queue': device_queue(data)}
+    state['device_audit'] = {'manifest': proofs[0], 'proofs': proofs[1:], 'queue': device_queue(data),
+                             'recovery_ready': bool(data.get('recovery_plan'))}
     state['verification_proofs'].extend(proofs)
     state.update(status='planned', failure=None)
     save(run, state, 'device-audit-recorded')
@@ -606,12 +623,20 @@ def guided_review(run, state, report_path):
     if report.get('phase') != state['phase'] or set(report.get('checks',{})) != set(contract['verification']):
         raise Fault('CONTRACT_REPORT_INVALID')
     proofs = []
+    expectations = None
     if state['phase']=='03-media':
         check=report['checks']['acpi_tables']
         if check.get('result')!='pass' or not isinstance(check.get('manifest'),str):
             raise Fault('ACPI_EVIDENCE_INVALID')
         proofs.extend(check_acpi_evidence(run,state.get('machine_a'),check['manifest']))
         proofs.extend(selected_solution(run, state, report.get('source_plan'), topic='efi', require_efi=True)['proofs'])
+        notice = report['checks'].get('installation_expectations', {})
+        if notice.get('result') != 'pass':
+            raise Fault('INSTALL_EXPECTATIONS_REQUIRED')
+        acpi = read_json(confined(run,check['manifest']))
+        data, refs = check_install_expectations(run,state.get('machine_a'),notice.get('manifest'),acpi['config']['path'])
+        proofs.extend(refs)
+        expectations = {'proofs':refs,'items':data['postinstall_items']}
     elif state['phase'] == '06-devices':
         devices, device_proofs = device_record(run, state, closing=True)
         proofs.extend(device_proofs)
@@ -653,6 +678,8 @@ def guided_review(run, state, report_path):
                 raise Fault('CONTRACT_REPORT_INVALID')
             limited = True
         proofs.extend({'path':p, **sha(confined(run,p))} for p in check['evidence'])
+    if expectations is not None:
+        state['install_expectations'] = expectations
     proof = evidence(run, 'guided-review', report)
     state.setdefault('guided_reviews',[]).append({'phase':state['phase'],'meaning':'agent-and-human-reviewed; not automatically verified','limited':limited,'report':proof,'proofs':proofs})
     state['verification_proofs'].extend([proof]+proofs)
@@ -801,6 +828,10 @@ def render_result(state, override=None):
                 else:
                     result['next_action'] = 'review'
                     action = '清单已逐项收尾，审核通过后才准备硬盘引导。'
+                if queue['open_items'] and not audit.get('recovery_ready'):
+                    action = '先准备驱动修改前的 EFI 备份与 Windows 恢复入口，同时继续只读检查。'
+            if not audit or not audit.get('recovery_ready'):
+                human += '\n\n**启动失败怎么办**　保留 U 盘；从主板启动菜单选 Windows Boot Manager，回到 Windows 后发来卡住的照片和当前 IP。我会接回原任务，读日志、修复或回滚。'
         elif phase == '07-boot':
             result['next_action'] = 'boot-ready'
             action = '我会备份并写入已验收 EFI，同时注册硬盘 OpenCore 启动项、设为优先并回读。'
@@ -821,10 +852,16 @@ def render_result(state, override=None):
                     result['next_action']='choose-efi'
                     summary = '备份与安装空间已确认，接下来制作适合 A 的启动文件（EFI）。'
                     action = '先选制作方式，我会核对本机资料，再制作启动 U 盘。'
-                    human = '回复 a、b 或 c。已有同机成功 EFI 会保留为对照。'
+                    human = '回复 1、2 或 3。第 4 种只在前三种均不可用时启用；已有同机成功 EFI 会保留为对照。'
     if result.get('next_action') == 'choose-efi':
-        result['options'] = [{'value': key, 'label': label} for key, label in EFI_CHOICES.items()]
-        human += '\n\n' + '\n'.join(key + ' · ' + label for key, label in EFI_CHOICES.items())
+        result['options'] = [{'number': n, 'value': key, 'label': label} for n,(key,label) in enumerate(EFI_CHOICES.items(),1)]
+        result['recommended_choice'] = 'd'
+        human += '\n\n' + '\n'.join(str(o['number']) + ' · ' + o['label'] for o in result['options'])
+    if phase == '04-install' and not state.get('failure') and state.get('install_expectations',{}).get('items'):
+        rows = state['install_expectations']['items']
+        human += '\n\n**装完后继续修复**\n' + '\n'.join('- ' + row['name'].replace('\n',' ') + '：' + row['impact'].replace('\n',' ') for row in rows[:6])
+        if len(rows)>6: human += '\n- 另有 ' + str(len(rows)-6) + ' 项已记录在安装后清单。'
+        human += '\n这些已查证的功能缺口会在进入桌面后继续处理；不据此单独认定 EFI 制作失败。'
     if state.get('status') == 'running':
         result['next_action'] = 'resume'
         summary, action, human = '上次连接检查还没有最终结果。', '我会确认上一次检查已结束，再继续验证。', '暂时无需操作。'
@@ -846,7 +883,7 @@ def main():
     for action in ('init','status','intro-shown','resume','recheck','recover','upgrade'):
         sub.add_parser(action)
     p = sub.add_parser('prepare'); p.add_argument('--b-ip',action='append')
-    p = sub.add_parser('choose-efi'); p.add_argument('--choice',required=True,choices=EFI_CHOICES)
+    p = sub.add_parser('choose-efi'); p.add_argument('--choice',required=True,choices=tuple(EFI_CHOICES)+tuple(EFI_NUMBERS))
     p = sub.add_parser('import'); p.add_argument('--file',required=True,type=Path)
     p = sub.add_parser('verify'); group=p.add_mutually_exclusive_group(); group.add_argument('--credential-file',type=Path); group.add_argument('--key-file',type=Path)
     for action in ('diagnose','repair-result','review','problem','select-source','record-devices','boot-ready'):

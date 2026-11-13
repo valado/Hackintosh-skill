@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.10"
+  version: "0.2.12"
   language: zh-CN
   updated: "2026-11-05"
 ---
@@ -19,7 +19,7 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 
 源码升级遇到 LF／CRLF 差异时使用控制器已登记的迁移能力。以 `workflow.py status` 核对版本和阶段，旧 NEXT.md 只作线索。工具探索、临时假设和逐文件检查留在私有日志。核对完整证据后再下结论。
 
-**03 组装 EFI、04 引导故障、06 设备修复都从 [现成方案入口](references/10-existing-solutions.md) 开始。** 新建 EFI 先让用户选 a／b／c；随后在 B 运行 `python scripts/solutions.py lookup <主题> --target "<本机板型／设备ID>"`，按所选路线核对来源，由控制器 `select-source` 登记。保留生成器产物、实际案例原版或官方 Sample，再比较差异并适配。连续无效的同来源试验按控制器错误码回到有依据的来源或交接该项。
+**03 组装 EFI、04 引导故障、06 设备修复都从 [现成方案入口](references/10-existing-solutions.md) 开始。** 新建 EFI 先按 1／2／3／4 的推荐顺序让用户选择；随后在 B 运行 `python scripts/solutions.py lookup <主题> --target "<本机板型／设备ID>"`，按所选路线核对来源，由控制器 `select-source` 登记。保留生成器产物、实际案例原版或官方 Sample，再比较差异并适配。连续无效的同来源试验按控制器错误码回到有依据的来源或交接该项。
 
 下载 GitHub 工具、源码或驱动时，按 [文件下载与局域网中转](references/04-installer.md) 核对实际下载端和具体资产。A 拉取失败就测 B，B 可达时由 B 校验并经 SFTP 中转；两端均失败时使用已有可信缓存或离线包，继续其他可做的检查。
 
@@ -27,7 +27,9 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 
 用户只需一次 A 端配置与结果回传；已有完整可信结果直接导入，已有凭据直接使用。B 的 Python／工具不可用时明确标为“人工指导模式”，按下面参考执行，不伪造控制器输出。用户未要求切换模式时，不因为某个检查失败而绕过程序改用自由操作。
 
-**EFI 路线先让用户选：** 新任务进入 03，原样展示控制器的 a／b／c 选项。a 为 RapidEFI-Tool 生成后适配（推荐），b 为查找相似配置并适配，c 为 AI 按官方 Sample 与本机证据生成。用户选好后执行 `choose-efi --choice a|b|c`，再 `lookup → select-source`；已有明确选择直接登记，不重复提问。不能自动改选另一条路线，也不能让用户手工完成具备桌面自动化能力的 Agent 可以完成的点击。RapidEFI 的固定操作、双机自动化分工和桌面产物定位见 [现成方案入口](references/10-existing-solutions.md)。
+**EFI 路线先让用户选：** 阶段 03 按 **1 · 1401（首选推荐）→2 · RapidEFI-Tool（备用）→3 · 相似配置→4 · AI 自行配置（前三种均不可用时）** 展示。用户已明确选择或说“按推荐”时直接登记 `choose-efi --choice 1|2|3|4`，不重复问。内部 ID 仍对应 d/a/b/c，旧任务选择不变。1401 按 [免点击调用流程](references/12-1401.md) 采集、规划、构建；下载失败先诊断原站和 A/B 网络，寻找可验证的镜像／加速，均不可用再请用户换路线，不能直接手写。第 4 条必须有前三条不可用的真实记录才能登记。RapidEFI 可自动操作可见 GUI，并从实际运行账户桌面取回产物；详见 [现成方案与回退](references/10-existing-solutions.md)。
+
+**构建完成先说明预期：** 重启安装前，用 [安装能力告知](references/13-install-expectations.md) 简短列出要装完 macOS 后修复的硬件、暂时影响与后续动作，登记 `installation_expectations`。例如本轮待装 NVIDIA 加速或 RTL8127 驱动，不能让用户以为 EFI 生成失败；也不能把安装必需的唯一网卡、显示／输入或存储问题一概推迟。声明的项目必须进入阶段 06 全机清单。
 
 **EFI 审计与排错：** 阶段 03 组装前和 04 首次启动失败后，必须读取 [EFI 固定决策与排错流程](references/09-efi-diagnostics.md)。同机成功基线保留为对照；本轮按用户选择的路线生成。使用 `efi_audit.py` 检查配置启用状态、条件、文件差异和版本依据，部署后核对回读。连续两轮无新证据时回到基线／部署／日志核对，再依据新证据或交接继续。任一路线都要通过原有 ACPI、来源、校验及写后回读门槛。
 
@@ -254,7 +256,7 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 
 ## 首次进入 macOS 后的顺序
 
-远程登录成功即进入 06：自动全机扫描，对照 Windows 清单，先展示异常／待测表并 `record-devices`；每张网卡、显卡优先，逐项查同机基线与社区开源方案并修复测试。单项无解先跳过继续其余项，所有未测和限制集中交代；清单关闭前不能写硬盘 ESP。此处必须读 [安装后固定合同](references/11-postinstall-contract.md)。
+远程登录成功即进入 06：自动全机扫描，对照 Windows 清单，先展示异常／待测表并 `record-devices`；每张网卡、显卡优先，逐项查同机基线与社区开源方案并修复测试。单项无解先跳过继续其余项，所有未测和限制集中交代；清单关闭前不能写硬盘 ESP。修改驱动前先备份、登记 `recovery_plan` 并展示“启动失败就回 Windows”短卡；失败后按 [恢复办法](references/06-postinstall.md) 切回 Windows 连接取证／回滚，保留阶段 06 和当前设备。此处必须读 [安装后固定合同](references/11-postinstall-contract.md)。
 
 07 必须一起完成已验收 EFI 部署、固件硬盘 OC 启动项和优先顺序、菜单显示与回读；`boot-ready` 通过再交付拔 U 盘冷启动。只复制 EFI 或只设置 LauncherOption 都不算完成。
 

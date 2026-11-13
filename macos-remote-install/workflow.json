@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.10",
+  "version": "0.2.12",
   "phases": [
     {
       "id": "00-remote",
@@ -106,15 +106,16 @@
         "清空具体 U 盘已授权"
       ],
       "actions": [
-        "先展示 a RapidEFI（推荐）／b 相似配置／c 官方模板路线，由用户选择并用 choose-efi 登记，再 select-source",
-        "复用有效本机 ACPI；缺少时自动准备 Python 并在 A 的 Windows 中导出",
+        "先展示 1 1401（首选）／2 RapidEFI（备用）／3 相似配置／4 AI 自行配置（前三种均不可用）；按选择 choose-efi 后 select-source",
+        "复用有效 A 原始 ACPI；1401 优先用发行包自带运行环境采集，不重复安装 Python；其他路线缺少时自动准备 Python 并在 A Windows 导出",
         "下载校验",
         "组装本机 EFI",
         "运行 efi_audit.py 审计开关、条件、文件差异与版本依据，并纳入 firmware_config_review",
         "运行同版本 ocvalidate",
         "准备 U 盘",
         "写入并从 A 回读校验",
-        "具体 GitHub 资产下载失败时换 A／B 取件，核验完整文件并经 SFTP 中转"
+        "下载失败先诊断原站与 A/B 网络、搜索核验镜像或加速；无可用下载才请求改选备用路线",
+        "写后检查通过，向用户简要告知后置驱动和暂时限制，登记 installation_expectations；安装阻塞不能延后"
       ],
       "verification": [
         "usb_identity",
@@ -124,7 +125,8 @@
         "recovery_integrity",
         "media_readback",
         "acpi_tables",
-        "firmware_config_review"
+        "firmware_config_review",
+        "installation_expectations"
       ],
       "failure_route": "diagnose-current",
       "resume": "03-media.validate",
@@ -133,7 +135,7 @@
         "default": "windows-python",
         "extra_reboot_default": false,
         "reuse_valid_target_tables": true,
-        "python": "reuse-working-interpreter-else-official-per-user-install",
+        "python": "reuse-1401-bundled-or-working-interpreter-else-official-per-user-install",
         "native_exception": "verified-native-exporter-may-run-without-python-or-reboot",
         "alternative": {
           "method": "opencore-sysreport",
@@ -147,8 +149,10 @@
       "efi_protocol": {
         "reference": "references/09-efi-diagnostics.md",
         "source_order": [
-          "user-selected-rapidefi-or-similar-or-official-sample",
-          "preserve-applicable-same-machine-baseline-for-comparison"
+          "1401-recommended",
+          "rapidefi-backup",
+          "similar-configuration",
+          "official-sample-only-after-all-three-unavailable"
         ],
         "audit": "scripts/efi_audit.py",
         "runtime_verified_by_audit": false,
@@ -161,16 +165,32 @@
         "reference_source_choice": "references/10-existing-solutions.md",
         "choice_action": "choose-efi",
         "choices": {
-          "a": "RapidEFI-Tool generation then adaptation (recommended)",
-          "b": "documented similar-machine EFI adaptation",
-          "c": "AI adaptation from pinned official OpenCore Sample"
+          "d": "1401 CLI (recommended)",
+          "a": "RapidEFI (backup)",
+          "b": "similar-machine adaptation",
+          "c": "AI official Sample (all prior routes unavailable)"
         },
         "picker_handoff": "Explain actual text or graphical picker and Spacebar auxiliary entries",
         "install_picker": {
           "HideAuxiliary": false,
           "gate": "EFI_PICKER_INVALID",
           "fallback_hint": "If only Windows is visible, press Spacebar."
-        }
+        },
+        "recommended_choice": "d",
+        "input_numbers": {
+          "1": "d",
+          "2": "a",
+          "3": "b",
+          "4": "c"
+        },
+        "network_fallback": "origin -> alternate A/B path -> verified mirrors/acceleration -> user chooses alternative",
+        "manual_gate": "three fallback_checks with evidence; network failures require origin/alternate_host/mirror_search"
+      },
+      "expectations_gate": {
+        "schema": "install-expectations-v1",
+        "reference": "references/13-install-expectations.md",
+        "defer_to": "06-devices",
+        "installation_blockers_must_be_resolved": true
       }
     },
     {
@@ -261,7 +281,9 @@
         "有回退与现场恢复方式"
       ],
       "actions": [
+        "导入安装前后置驱动清单，保留设备 ID 和类别，随后扫描全机；不能漏掉已告知项目",
         "运行 collect-macos.sh；与 Windows 清单逐件对照，先向用户展示异常／待测清单",
+        "任何驱动修改前备份到 B、核对 Windows 备用连接、展示启动失败恢复卡并登记 recovery_plan；失联后从 Windows 取证或回滚，保留当前阶段",
         "用 record-devices 登记完整清单；顺序为每张网卡→显卡→无线／蓝牙→USB→音频／存储／电源及系统功能",
         "某项无解或等现场配合时标 deferred/waiting-user，继续下一项；全部待办处理完且限制明确接受后才 review",
         "对照 Windows 清单逐件盘点本轮设备，分别记录每张网卡、无线与蓝牙",

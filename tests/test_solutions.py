@@ -44,7 +44,7 @@ class SolutionTests(unittest.TestCase):
 
     def test_hardware_routing_returns_project_and_usable_template(self):
         self.assertIn('stefb69', self.plan['candidates'][1]['source'])
-        self.assertIn('RapidEFI', solutions.lookup('efi','fixture')['cards'][0]['source'])
+        self.assertEqual(solutions.lookup('efi','fixture')['cards'][0]['source'],'https://github.com/nullmoth/1401')
         self.assertIn('WhateverGreen', solutions.lookup('gpu','1002:fixture')['cards'][0]['source'])
         self.assertIn('USBToolBox', solutions.lookup('usb','fixture')['cards'][0]['source'])
         self.assertEqual(solutions.assess(self.run,self.path)['kind'], 'project')
@@ -89,7 +89,7 @@ class SolutionTests(unittest.TestCase):
         self.state.update(phase='03-media')
         flow.save(self.run,self.state,'switch-to-media')
         p=copy.deepcopy(self.plan);p['topic']='efi'
-        p['candidates'][1].update(source=solutions.CARDS['efi'][0]['source'],base_config='staging/original/EFI/OC/config.plist')
+        p['candidates'][1].update(source='https://github.com/JeoJay127/RapidEFI-Tool',base_config='staging/original/EFI/OC/config.plist')
         self.write(self.path,p)
         command=[sys.executable,'-B',str(SCRIPTS/'workflow.py'),'--run',str(self.run),'--json']
         def cli(*args):
@@ -113,7 +113,7 @@ class SolutionTests(unittest.TestCase):
             flow.select_source(self.run,self.state,self.run/self.path)
         self.assertEqual(error.exception.code,'EFI_ROUTE_REQUIRED')
         output=flow.render_result(self.state)
-        self.assertEqual([o['value'] for o in output['options']],['a','b','c'])
+        self.assertEqual([o['value'] for o in output['options']],['d','a','b','c'])
         self.assertIn('推荐',output['options'][0]['label'])
 
     def test_manual_and_similar_choices_use_the_selected_evidence(self):
@@ -125,11 +125,69 @@ class SolutionTests(unittest.TestCase):
                 plan['candidates'].append({'kind':'recipe','source':source,'revision':'commit-fixture',
                     'fit':'explicit user route and matching hardware','evidence':self.ev,'status':'usable',
                     'base_config':'staging/original.plist'})
+                if route=='c': plan['fallback_checks']=self.fallback()
                 self.write(self.path,plan)
                 chosen=solutions.assess(self.run,self.path,topic='efi',efi_route=route)
                 self.assertEqual(chosen['source'],source)
                 with self.assertRaises(Fault):
                     solutions.assess(self.run,self.path,topic='efi',efi_route='a')
+
+    def fallback(self):
+        return [{'route':r,'outcome':'unavailable','basis':'incompatible',
+                 'reason':'synthetic incompatible result','evidence':self.ev} for r in ('d','a','b')]
+
+    def test_manual_fallback_requires_all_routes_and_network_research(self):
+        p=solutions.lookup('efi','fixture-board')['template']
+        p.update(environment='synthetic build',hardware_evidence=self.hw)
+        p['candidates'].append({'kind':'recipe','source':'https://github.com/acidanthera/OpenCorePkg/blob/v-fixture/Docs/Sample.plist',
+            'revision':'fixture-version','fit':'synthetic','evidence':self.ev,'status':'usable','base_config':'staging/original.plist'})
+        def check():
+            self.write(self.path,p)
+            return solutions.assess(self.run,self.path,efi_route='c')
+        with self.assertRaises(Fault): check()
+        p['fallback_checks']=self.fallback()
+        p['fallback_checks'][0]['outcome']='usable'
+        with self.assertRaises(Fault): check()
+        p['fallback_checks'][0].update(outcome='unavailable',basis='network')
+        with self.assertRaises(Fault): check()
+        p['fallback_checks'][0]['network_checks']={'origin':self.hw,'alternate_host':self.ev}
+        with self.assertRaises(Fault): check()
+        mirror=self.write('evidence/mirror-check.txt','synthetic mirror results; no verified artifact')
+        p['fallback_checks'][0]['network_checks']['mirror_search']=mirror
+        result=check()
+        self.assertIn(mirror,[ref['path'] for ref in result['proofs']])
+        p['fallback_checks'][2]['route']='a'
+        with self.assertRaises(Fault): check()
+
+    def test_numbered_choices_preserve_legacy_ids(self):
+        self.state.update(phase='03-media')
+        for number,legacy in [('1','d'),('2','a'),('3','b'),('4','c')]:
+            flow.choose_efi(self.run,self.state,number)
+            self.assertEqual(flow.efi_choice(self.run,self.state),legacy)
+        flow.choose_efi(self.run,self.state,'a')
+        self.assertEqual(flow.efi_choice(self.run,self.state),'a')
+        self.assertIn('RapidEFI',flow.EFI_CHOICES['a'])
+
+    def test_1401_choice_uses_pinned_project_and_original_config(self):
+        p=solutions.lookup('efi','fixture-board')['template']
+        p.update(environment='synthetic build',hardware_evidence=self.hw)
+        original='staging/original1401/EFI/OC/config.plist'
+        self.write(original,plistlib.dumps({'ACPI':{},'Kernel':{},'UEFI':{}}))
+        row=next(c for c in p['candidates'] if c['source']=='https://github.com/nullmoth/1401')
+        row.update(status='usable',revision='fixture-pinned-commit',fit='synthetic source check',evidence=self.ev,base_config=original)
+        self.write(self.path,p)
+        self.state.update(phase='03-media')
+        flow.choose_efi(self.run,self.state,'d')
+        result=flow.select_source(self.run,self.state,self.run/self.path)
+        self.assertEqual(result['source'],row['source'])
+        self.assertEqual(flow.load(self.run)['efi_choice']['choice'],'d')
+        self.assertEqual(solutions.assess(self.run,self.path,efi_route='d',require_efi=True)['kind'],'project')
+        for alternative in ('a','b','c'):
+            with self.assertRaises(Fault): solutions.assess(self.run,self.path,efi_route=alternative)
+        row['revision']='main';self.write(self.path,p)
+        with self.assertRaises(Fault): solutions.assess(self.run,self.path,efi_route='d')
+        row['revision']='fixture-pinned-commit';row['base_config']='missing.plist';self.write(self.path,p)
+        with self.assertRaises(Fault): solutions.assess(self.run,self.path,efi_route='d',require_efi=True)
 
     def test_efi_choice_is_persistent_and_its_evidence_cannot_change(self):
         self.state.update(phase='03-media')
@@ -153,7 +211,7 @@ class SolutionTests(unittest.TestCase):
         flow.choose_efi(self.run,self.state,'a')
         plan=copy.deepcopy(self.plan)
         plan['topic']='efi'
-        plan['candidates'][1].update(source=solutions.CARDS['efi'][0]['source'],base_config='staging/original.plist')
+        plan['candidates'][1].update(source='https://github.com/JeoJay127/RapidEFI-Tool',base_config='staging/original.plist')
         self.write(self.path,plan)
         selected=flow.select_source(self.run,self.state,self.run/self.path)
         self.state['source_trials']={selected['trial_key']:2}

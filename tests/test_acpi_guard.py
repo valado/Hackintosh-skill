@@ -38,6 +38,12 @@ class ACPIGuardTests(unittest.TestCase):
     def review(self,include_acpi=True):
         checks={key:{'result':'pass','basis':'tool','evidence':[self.rel(self.capture)]} for key in flow.PHASES['03-media']['verification']}
         if include_acpi: checks['acpi_tables']['manifest']=self.write_manifest()
+        notice={'schema':'install-expectations-v1','machine_uuid':MACHINE['uuid'],
+            'config':self.rel(self.config),'assessment':self.rel(self.assessment),'presented':self.rel(self.capture),
+            'install_network':self.rel(self.capture),'install_display':self.rel(self.capture),
+            'install_input':self.rel(self.capture),'install_storage':self.rel(self.capture),
+            'blocking_items':[],'postinstall_items':[]}
+        checks['installation_expectations']['manifest']=self.rel(self.put('evidence/expectations.json',json.dumps(notice).encode()))
         original=self.put('staging/original/OC/config.plist',plistlib.dumps({'ACPI':{},'Kernel':{},'UEFI':{}}))
         source={'topic':'efi','target':'test board install','environment':'synthetic x86_64',
                 'hardware_evidence':self.rel(self.raw),'candidates':[{'kind':'baseline','source':'local',
@@ -57,6 +63,39 @@ class ACPIGuardTests(unittest.TestCase):
         self.assertEqual(self.state['phase'],'04-install')
         paths=[p['path'] for p in self.state['verification_proofs']]
         self.assertIn(self.rel(self.raw),paths);self.assertIn(self.rel(self.patch),paths)
+
+    def test_postinstall_notice_is_required_even_with_valid_efi(self):
+        report=self.review();data=json.loads(report.read_bytes());data['checks'].pop('installation_expectations')
+        report.write_text(json.dumps(data),encoding='utf-8')
+        with self.assertRaises(Fault) as error: flow.guided_review(self.run,self.state,report)
+        self.assertEqual(error.exception.code,'CONTRACT_REPORT_INVALID')
+        self.assertEqual(self.state['phase'],'03-media')
+
+    def test_notice_does_not_allow_installation_blockers_or_missing_input(self):
+        report=self.review();path=self.run/'evidence/expectations.json';original=json.loads(path.read_bytes())
+        for change in ('blocking','input','config','identity','presented'):
+            data=copy.deepcopy(original)
+            if change=='blocking': data['blocking_items']=['only NIC unavailable']
+            elif change=='input': data.pop('install_input')
+            elif change=='config': data['config']=self.rel(self.patch)
+            elif change=='identity': data['machine_uuid']='different-machine'
+            else: data['presented']='missing-notice.txt'
+            path.write_text(json.dumps(data),encoding='utf-8')
+            with self.subTest(change=change),self.assertRaises(Fault): flow.guided_review(self.run,self.state,report)
+            self.assertEqual(self.state['phase'],'03-media')
+
+    def test_deferred_device_notice_is_frozen_and_shown_before_install(self):
+        report=self.review();path=self.run/'evidence/expectations.json';data=json.loads(path.read_bytes())
+        row={'id':'gpu0','category':'gpu','name':'Synthetic GPU','hardware_id':'PCI\\GPU_A',
+             'reason':'fixture system driver','impact':'display available; acceleration pending',
+             'next_action':'install then test','defer_to':'06-devices',
+             'source':'https://example.org/fixture-driver','evidence':self.rel(self.assessment)}
+        data['postinstall_items']=[row];path.write_text(json.dumps(data),encoding='utf-8')
+        flow.guided_review(self.run,self.state,report)
+        self.assertEqual(self.state['install_expectations']['items'],[row])
+        self.assertIn('Synthetic GPU',flow.render_result(self.state)['display'])
+        self.assertIn('acceleration pending',flow.render_result(self.state)['display'])
+        self.assertIn(self.rel(path),[r['path'] for r in self.state['install_expectations']['proofs']])
 
     def test_written_pass_without_tables_cannot_advance(self):
         with self.assertRaises(Fault): flow.guided_review(self.run,self.state,self.review(False))

@@ -18,8 +18,9 @@ def project(repo, task):
 GUIDE = 'https://dortania.github.io/OpenCore-Install-Guide/'
 CARDS = {
     'efi': [
+        project('nullmoth/1401', '首选免点击 CLI：A 的 Report.json 与原始 ACPI → plan/build；先查网络再判断工具不可用，保留原始产物和自带审计。详见 12-1401。'),
         project('JeoJay127/RapidEFI-Tool', '从 A 导出本工具可读的硬件报告与 ACPI。在 B 导入或在 A 的可见桌面自动配置，保留原始 EFI、configModel 与版本。'),
-        project('lzhoang2801/OpCore-Simplify', '核对当前版本的硬件报告格式和目标系统。使用 A 的报告、原始表和作者入口生成独立 EFI 目录。')],
+        project('lzhoang2801/OpCore-Simplify', '其他现成工具线索；核对报告格式和系统，使用 A 的真实输入生成独立 EFI。不能用换工具来跳过用户已选路线。')],
     'acpi': [project('corpnewt/SSDTTime', '输入本机原始 DSDT，选与问题对应的功能，检查生成的 AML 及需要合并的 patches_OC.plist。')],
     'usb': [project('USBToolBox/tool', '在 A 的 Windows 逐孔发现端口、记录速度和插孔，生成本机映射。'),
             project('USBToolBox/kext', '核对映射选择的运行方式、依赖与控制器匹配，再同时测试安装介质和键鼠。')],
@@ -95,6 +96,29 @@ def is_https(source):
     return bool(url.scheme == 'https' and url.hostname and not url.username and not url.password)
 
 
+def manual_fallback(run, plan):
+    """Require documented exhaustion, including network checks when retrieval failed."""
+    rows = plan.get('fallback_checks')
+    if not isinstance(rows, list) or len(rows) != 3:
+        raise PlanError('manual EFI requires results for 1401, RapidEFI and similar configurations')
+    proofs, seen = [], set()
+    for row in rows:
+        if not isinstance(row, dict) or row.get('route') not in ('d','a','b') or row['route'] in seen:
+            raise PlanError('one fallback result per preceding route required')
+        seen.add(row['route'])
+        if row.get('outcome') != 'unavailable' or row.get('basis') not in ('network','incompatible','generation-failed','no-suitable-source'):
+            raise PlanError('preceding route is still viable or unchecked')
+        required_text(row, 'reason')
+        proofs.append(proof(run, required_text(row, 'evidence')))
+        if row['basis'] == 'network':
+            network = row.get('network_checks')
+            if not isinstance(network, dict):
+                raise PlanError('network failure requires origin, alternate-host and mirror research evidence')
+            for key in ('origin','alternate_host','mirror_search'):
+                proofs.append(proof(run, required_text(network, key)))
+    return proofs
+
+
 def assess(run, relative, *, topic=None, require_efi=False, efi_route=None):
     """Resolve the highest viable tier; frozen files prove provenance, not applicability."""
     try:
@@ -123,18 +147,22 @@ def assess(run, relative, *, topic=None, require_efi=False, efi_route=None):
                 raise PlanError('unknown candidate kind or status')
 
         route = efi_route if group == 'efi' else None
-        if route not in (None, 'a', 'b', 'c'):
+        if route not in (None, 'a', 'b', 'c', 'd'):
             raise PlanError('unknown user EFI choice')
         rapid = 'https://github.com/JeoJay127/RapidEFI-Tool'.casefold()
+        headless = 'https://github.com/nullmoth/1401'.casefold()
         official = 'https://github.com/acidanthera/OpenCorePkg'.casefold()
+        if route == 'c':
+            proofs.extend(manual_fallback(run, plan))
         checked = set()
-        kinds = KINDS if route is None else (('project',) if route == 'a' else ('recipe',))
+        kinds = KINDS if route is None else (('project',) if route in ('a', 'd') else ('recipe',))
         for kind in kinds:
             tier = [row for row in rows if row.get('kind') == kind]
             if route:
                 tier = [row for row in tier if (
                     (route == 'a' and str(row.get('source', '')).rstrip('/').casefold() == rapid)
-                    or (route == 'b' and str(row.get('source', '')).rstrip('/').casefold() not in (rapid, official))
+                    or (route == 'd' and str(row.get('source', '')).rstrip('/').casefold() == headless)
+                    or (route == 'b' and str(row.get('source', '')).rstrip('/').casefold() not in (rapid, official, headless))
                     or (route == 'c' and (str(row.get('source', '')).rstrip('/').casefold() == official
                         or str(row.get('source', '')).casefold().startswith(official + '/')))
                 )]
@@ -158,7 +186,7 @@ def assess(run, relative, *, topic=None, require_efi=False, efi_route=None):
                     raise PlanError('record upstream tool or driver search before recipe fallback')
                 if kind == 'recipe' and group == 'efi' and route is None:
                     if any(card['source'].casefold() not in checked for card in CARDS['efi']):
-                        raise PlanError('check both EFI generators before template fallback')
+                        raise PlanError('check the listed EFI generators before template fallback')
                 row = usable[0]
                 if group == 'efi':
                     confined(run, required_text(row, 'base_config'))
@@ -196,7 +224,7 @@ def main():
     check = subs.add_parser('check')
     check.add_argument('--run', required=True, type=Path)
     check.add_argument('--file', required=True, help='Private plan path relative to run')
-    check.add_argument('--efi-route', choices=('a','b','c'), help='Use the EFI route explicitly selected by the user')
+    check.add_argument('--efi-route', choices=('a','b','c','d'), help='Use the EFI route explicitly selected by the user')
     args = parser.parse_args()
     if args.command == 'lookup':
         result = lookup(args.topic, args.target)

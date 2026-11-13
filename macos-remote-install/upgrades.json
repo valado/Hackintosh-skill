@@ -421,6 +421,88 @@
       ],
       "rewind_phases": [],
       "source_variants": {}
+    },
+    "0.2.10": {
+      "sources": {
+        "workflow.py": "fd6bd95cbee6658a90cc207b4a3e0c2f60b1e16c832096c1903a7f865532fdff",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360",
+        "enable-windows-ssh.ps1": "ed88547a0f1e2366e6545feb0b90383eb6518ee659b92d5e01b8ff9e3d02bb1d",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "acpi_guard.py": "dfa07bacdebff5bab6c9893331faf7cf518e6fd08a1f3414b3babb98879056e4",
+        "efi_audit.py": "57466518f4083063bc303b176cb5db165d6d0f440af094aefc6318db7f72e96e",
+        "metal_smoke_test.js": "ab1a8c2a52fba55fe3bf46898b138d0150a763f131d2178e22f393dc19fdbef3",
+        "solutions.py": "75b03a78039581cf91c334a4eee4c29d73cb86011e319775e55c63240699a7e9",
+        "postinstall_guard.py": "2d9e8e0032c96c814eb057b490ce658bf45d8694c8c9cf43ab0086537f39f0d8",
+        "collect-macos.sh": "bb9707e165cb6d12c3b357fd57723b67a3b498ef35e3fb20a56ed4823aaa9c63",
+        "workflow.json": "23b41bec4008832e277b8b612c8897fe83f206f65c4e6c5b4f160dce4cb12890",
+        "upgrades.json": "da3c0c7f22da127c15baa514cb04da57cb64f5c6d3c72a915801cf0101077eb4"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install",
+        "05-macos-remote",
+        "06-devices",
+        "07-boot",
+        "08-delivery"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install",
+        "05-macos-remote",
+        "06-devices",
+        "07-boot",
+        "08-delivery"
+      ],
+      "rewind_phases": [],
+      "source_variants": {}
+    },
+    "0.2.11": {
+      "sources": {
+        "workflow.py": "ddb033de1dad04218b89b293a569eb7736d7a247aca40f7974d5ec437ba17c32",
+        "ssh_transport.py": "71a441e14dc6a4e130322e764e4bf37f9c21b23f1d9b4f2126c3e4debe5a2433",
+        "probe-windows.ps1": "47a772c41058a91c3c412c8f1cab2bc335b5b14c0d2d909720a93a8b79cde360",
+        "enable-windows-ssh.ps1": "ed88547a0f1e2366e6545feb0b90383eb6518ee659b92d5e01b8ff9e3d02bb1d",
+        "prepare_ssh_handoff.py": "c0501af412042320a883a22b45638221f3e7a527b351d93ef0e5369bc8d7071f",
+        "agentkit.py": "16186ae8ed3ed2efb0a967b850426588692dd28c218d4e2d28ed528812a02cdc",
+        "acpi_guard.py": "dfa07bacdebff5bab6c9893331faf7cf518e6fd08a1f3414b3babb98879056e4",
+        "efi_audit.py": "57466518f4083063bc303b176cb5db165d6d0f440af094aefc6318db7f72e96e",
+        "metal_smoke_test.js": "ab1a8c2a52fba55fe3bf46898b138d0150a763f131d2178e22f393dc19fdbef3",
+        "solutions.py": "b3862cc25666574ad1f2cafd1d1f43d403f85c12f123926754ef42785cf742fa",
+        "postinstall_guard.py": "687f4cfea5ffeee4007553fa6d05661198635ccd541a78f8467bc72ea49da5b7",
+        "collect-macos.sh": "bb9707e165cb6d12c3b357fd57723b67a3b498ef35e3fb20a56ed4823aaa9c63",
+        "workflow.json": "2a669743b94ef5250bc0293d314587d77987c0e8afb69ed6f3f9584ff075fe9d",
+        "upgrades.json": "ffd38c0c07815240b88f0d03662b6f18b054a6d79661f98336fbcb1bd6f1ab22"
+      },
+      "allowed_phases": [
+        "00-remote",
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install",
+        "05-macos-remote",
+        "06-devices",
+        "07-boot",
+        "08-delivery"
+      ],
+      "allowed_review_phases": [
+        "01-hardware",
+        "02-storage",
+        "03-media",
+        "04-install",
+        "05-macos-remote",
+        "06-devices",
+        "07-boot",
+        "08-delivery"
+      ],
+      "rewind_phases": [],
+      "source_variants": {}
     }
   }
 }

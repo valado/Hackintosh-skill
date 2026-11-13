@@ -1,6 +1,6 @@
 # 00 准备工作和远程接入 · 流程控制器参考
 
-v0.2.9 新任务进入阶段 03 时会返回 `next_action=choose-efi` 和 a／b／c。展示给用户后，依据真实回复执行 `python scripts/workflow.py --run "任务目录" --json choose-efi --choice a`（或 b、c），再按新的 `next_action` 查来源并登记。首次 `select-source` 缺少选择时返回 `EFI_ROUTE_REQUIRED`。既有任务已登记 EFI 来源时保留原路线继续，避免升级中途重复提问或重做产物。各路线的来源字段见 [现成方案入口](10-existing-solutions.md)。
+v0.2.12 新任务进入阶段 03 时会返回 `next_action=choose-efi` 和 1 · 1401（首选）、2 · RapidEFI（备用）、3 · 相似配置、4 · AI 自行配置（前三种均不可用）。展示后，依据回复或用户“按推荐”执行 `python scripts/workflow.py --run "任务目录" --json choose-efi --choice 1`（或 2、3、4；内部 ID 仍为 d/a/b/c），再按新的 `next_action` 查来源并登记。首次 `select-source` 缺少选择时返回 `EFI_ROUTE_REQUIRED`。既有任务已登记 EFI 来源时保留原路线继续，避免升级中途重复提问或重做产物。各路线的来源字段见 [现成方案入口](10-existing-solutions.md)。
 
 ## 定位与实际覆盖
 
@@ -165,6 +165,8 @@ v0.2.7 还登记了 v0.2.4、v0.2.5 的 00～04 和 v0.2.6 的 00～06 任务。
 v0.2.10 登记 0.2.9 全阶段源码迁移；旧版已到 07/08 的任务回到 06 补齐此门槛，历史审核保留、磁盘内容不回滚。仍在 05/06 保留阶段；复用有依据的旧实测，不重复安装。证据按不可变快照保存，更新清单须用新文件。
 
 ## 01～08 的统一合同
+
+v0.2.12 的阶段 03 还要求 `checks.installation_expectations` 为 pass 并指定 manifest，详见 [安装前功能说明](13-install-expectations.md)。说明与本机及实际安装配置绑定，声明的后置设备在 06 必须保留；新门槛不使已经进入 04 的旧任务倒退重装。v0.2.10／v0.2.11 的已登记任务可以按原阶段迁移，既有 a 路线继续表示 RapidEFI。
 
 v0.2.8 的 `lookup-then-select-source`、`SOLUTION_REQUIRED` 和 `SOLUTION_RETRY_LIMIT` 按 [现成方案入口](10-existing-solutions.md) 处理。用新文件登记每次选择；已入账的证据保持原字节。03 的 review、03／04／06 的 diagnose 和 06 的 review 检查来源字段。新条件只对新版执行的动作生效，旧任务先核对迁移条件；已有进行中的旧版修复先在原快照完成该次交接。
 
