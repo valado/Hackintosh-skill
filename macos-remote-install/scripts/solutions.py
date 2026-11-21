@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import plistlib
+import re
 from urllib.parse import urlsplit
 from xml.parsers.expat import ExpatError
 
@@ -25,7 +26,9 @@ CARDS = {
     'usb': [project('USBToolBox/tool', '在 A 的 Windows 逐孔发现端口、记录速度和插孔，生成本机映射。'),
             project('USBToolBox/kext', '核对映射选择的运行方式、依赖与控制器匹配，再同时测试安装介质和键鼠。')],
     'gpu': [project('nullmoth/nvidia-macos-driver', 'NVIDIA 候选。按 PCI ID、显示接线、系统 build 查原作者设备表和发布资产，区分覆盖范围、历史实测和本轮回读。'),
-            project('acidanthera/WhateverGreen', 'Intel／AMD 等受支持路线的补丁工具；核对具体架构、接线、已有底层驱动和作者 FAQ。')],
+            project('acidanthera/WhateverGreen', '传统 Intel／AMD 等受支持路线；不是所有 Intel GPU 的通用驱动，不能据此否定 Xe-LP。'),
+            project('b00t0x/WhateverXe', '部分 Xe-LP 的 Lilu 插件候选，按物理 PCI ID、系统完整版本和显示布线查证；与 WhateverGreen 不可同时生效。见 14-xe-lp。'),
+            project('b00t0x/WhateverXe-Graphics', '与 WhateverXe 配套的系统内图形组件；通常进入 macOS 后安装并验证 Metal。锁定兼容版本及依赖，不混用旧案例和新说明。')],
     'ethernet': [project('Mieze/LucyRTL8125Ethernet', 'RTL8125 候选，核对 PCI 匹配和当前 SSH 所用接口。'),
                  project('stefb69/RTL812xLucy', 'RTL8127 候选。分别核对 tag、提交对应的 CI 产物、架构、系统和铜口／光口；回读最终包的匹配字段。'),
                  project('acidanthera/IntelMausi', '仅核对作者列出的 Intel 有线设备；先比 PCI ID 再选驱动。')],
@@ -33,12 +36,36 @@ CARDS = {
              project('acidanthera/AirportBrcmFixup', 'Broadcom 候选：根据芯片及该系统的底层驱动查适配条件。')],
     'bluetooth': [project('OpenIntelWireless/IntelBluetoothFirmware', 'Intel 蓝牙：先确认 USB 枚举及芯片标识，再按版本说明选择固件与依赖，测试扫描配对。'),
                   project('acidanthera/BrcmPatchRAM', 'Broadcom 蓝牙候选：核对 USB 标识、固件变体和系统要求。')],
-    'audio': [project('acidanthera/AppleALC', '以 codec、PCB 接线及作者支持的布局为依据，分别测试播放和麦克风录音。')],
+    'audio': [project('acidanthera/AppleALC', '以 codec、PCB 接线及作者支持的布局为依据，分别测试播放和麦克风录音。'),
+              project('CloverHackyColor/VoodooHDA', 'AppleALC 路线不适配时核对的候选；版本间 EFI 注入与系统内安装方式不同，先查原作者，禁止与其他接管同一音频设备的驱动混装。')],
     'boot': [project('acidanthera/OpenCorePkg', '核对实际加载的 OC 构建和日志设置，取得启动证据。'),
              {'source': GUIDE + 'troubleshooting/extended/kernel-issues.html', 'task': '用确切启动阶段、panic 及平台筛选排错分支；对比同机成功安装 EFI。'}],
     'other': [{'source': GUIDE, 'task': '用板型／设备 ID、CPU 架构、系统 build、错误原文查原作者发布、维护者 issue 或可复现指南。'}]
 }
 KINDS = ('baseline', 'project', 'recipe')
+
+# Discovery snapshot only, not a support verdict. Recheck upstream for new IDs.
+XE_BACKEND_SOURCE = 'https://github.com/b00t0x/WhateverXe/blob/f26a36880c49ea1063393d943527808c0f38feca/docs/device-selection.md'
+XE_BACKEND_IDS = frozenset('''
+9A40 9A49 9A59 9A60 9A68 9A70 9A78 9AC0 9AC9 9AD9 9AF8
+46D0 46D1 46D2 46D3 46D4 4626 4628 462A
+46A0 46A1 46A2 46A3 46A6 46A8 46AA 46B0 46B1 46B2 46B3 46C0 46C1 46C2 46C3
+A720 A7A0 A7A8 A7AA A7AB A721 A7A1 A7A9 A7AC A7AD
+4680 4682 4688 468A 468B 4690 4692 4693 A780 A781 A782 A783 A788 A789 A78A A78B
+'''.lower().split())
+
+
+def gpu_routing(target):
+    """Route recorded physical PCI IDs; never infer compatibility from a CPU name."""
+    normalized = target.casefold()
+    ids = set(re.findall(r'\b([0-9a-f]{4}):([0-9a-f]{4})\b', normalized))
+    ids.update(re.findall(r'ven_([0-9a-f]{4})&dev_([0-9a-f]{4})(?![0-9a-f])', normalized))
+    xe = sorted(device for vendor, device in ids if vendor == '8086' and device in XE_BACKEND_IDS)
+    return {'physical_ids': sorted(v + ':' + d for v, d in ids),
+            'xe_backend_matches': ['8086:' + d for d in xe],
+            'source': XE_BACKEND_SOURCE, 'reference': 'references/14-xe-lp.md',
+            'status': 'xe-lp-candidate' if xe else 'needs-upstream-review',
+            'meaning': 'backend lookup only; verify physical ID, exact OS, dependencies and connectors; absence is not proof of no support'}
 
 class PlanError(ValueError):
     """Validation reason safe to return to the Agent."""
@@ -46,6 +73,7 @@ class PlanError(ValueError):
 
 def lookup(topic, target):
     cards = list(CARDS[topic])
+    routing = gpu_routing(target) if topic == 'gpu' else None
     if topic == 'ethernet':
         for token, index in [('8127', 1), ('8125', 0)]:
             if token in target:
@@ -54,8 +82,11 @@ def lookup(topic, target):
         else:
             if '8086:' in target:
                 cards.insert(0, cards.pop(2))
-    elif topic == 'gpu' and ('1002:' in target or '8086:' in target):
-        cards.reverse()
+    elif topic == 'gpu':
+        if routing['xe_backend_matches'] or (not routing['physical_ids'] and 'xe' in target.casefold()):
+            cards = [cards[2], cards[3], cards[1], cards[0]]
+        elif any(i.startswith(('1002:', '8086:')) for i in routing['physical_ids']):
+            cards = [cards[1], cards[2], cards[3], cards[0]]
     elif topic in ('wifi', 'bluetooth') and any(t in target.lower() for t in ('14e4:', '0a5c:', 'broadcom')):
         cards.reverse()
     template = {'topic': topic, 'target': target, 'environment': '',
@@ -72,6 +103,7 @@ def lookup(topic, target):
         for row in template['candidates']:
             row['base_config'] = ''
     return {'scope': 'offline leads; verify on A', 'topic': topic, 'cards': cards,
+            **({'routing': routing} if routing is not None else {}),
             'search_by': ['准确板型或 PCI/USB ID', '系统 build 与架构', '症状或错误原文'],
             'template': template}
 

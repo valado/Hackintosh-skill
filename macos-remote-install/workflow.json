@@ -1,6 +1,6 @@
 {
   "schema": "install-workflow-v1",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "phases": [
     {
       "id": "00-remote",
@@ -59,7 +59,15 @@
       ],
       "failure_route": "diagnose-current",
       "resume": "01-hardware.review",
-      "next": "02-storage"
+      "next": "02-storage",
+      "intel_xe_route": {
+        "reference": "references/14-xe-lp.md",
+        "lookup": "physical PCI ID -> WhateverXe backend + paired Graphics; no generation-only verdict",
+        "versions": "pin OS/build, plugin, graphics and trust dependencies together; resolve main/tag drift",
+        "stages": "EFI prerequisites before installation; system graphics after desktop; carry device into 06",
+        "conflict": "WhateverXe and WhateverGreen must not be effective together",
+        "acceptance": "enumeration, Metal compute, outputs, video and sleep are separate results; continue other devices"
+      }
     },
     {
       "id": "02-storage",
@@ -191,6 +199,14 @@
         "reference": "references/13-install-expectations.md",
         "defer_to": "06-devices",
         "installation_blockers_must_be_resolved": true
+      },
+      "intel_xe_route": {
+        "reference": "references/14-xe-lp.md",
+        "lookup": "physical PCI ID -> WhateverXe backend + paired Graphics; no generation-only verdict",
+        "versions": "pin OS/build, plugin, graphics and trust dependencies together; resolve main/tag drift",
+        "stages": "EFI prerequisites before installation; system graphics after desktop; carry device into 06",
+        "conflict": "WhateverXe and WhateverGreen must not be effective together",
+        "acceptance": "enumeration, Metal compute, outputs, video and sleep are separate results; continue other devices"
       }
     },
     {
@@ -314,6 +330,14 @@
         "deferred_is_complete": false,
         "source_search_before_repair": true,
         "esp_write_before_closed": false
+      },
+      "intel_xe_route": {
+        "reference": "references/14-xe-lp.md",
+        "lookup": "physical PCI ID -> WhateverXe backend + paired Graphics; no generation-only verdict",
+        "versions": "pin OS/build, plugin, graphics and trust dependencies together; resolve main/tag drift",
+        "stages": "EFI prerequisites before installation; system graphics after desktop; carry device into 06",
+        "conflict": "WhateverXe and WhateverGreen must not be effective together",
+        "acceptance": "enumeration, Metal compute, outputs, video and sleep are separate results; continue other devices"
       }
     },
     {

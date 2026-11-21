@@ -1,6 +1,6 @@
 # 第一次用 WorkBuddy 带你安装 macOS
 
-本指南对应 v0.2.12。你在一台电脑上看助手的提示，再到另一台完成需要人到场的操作。
+本指南对应 v0.2.13。你在一台电脑上看助手的提示，再到另一台完成需要人到场的操作。
 
 ## 先认清两台电脑
 
@@ -54,6 +54,6 @@
 ## 其他使用方式
 
 - 支持标准技能的客户端可加载 [SKILL.md](macos-remote-install/SKILL.md)。只能传一个文本文件时，可读 [单文件指南](AI-GUIDE.md)。用到配套程序时，仍需提供完整包。
-- WorkBuddy 客户端若有本地技能导入入口，下载这个 ZIP 后选择导入。也可以直接使用上面的仓库链接或解压目录。[下载 v0.2.12 WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.12.zip) · [查看包校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)
+- WorkBuddy 客户端若有本地技能导入入口，下载这个 ZIP 后选择导入。也可以直接使用上面的仓库链接或解压目录。[下载 v0.2.13 WorkBuddy 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.13.zip) · [查看包校验值](https://github.com/zxmls-ai/Hackintosh-skill/blob/main/downloads/SHA256SUMS.txt)
 - 本版处于测试阶段。能否安装、能修复哪些功能，需要根据 A 的真实硬件和你的实际测试判断。[验证范围](VALIDATION.md)
 - 反馈请附当时的阶段、已做操作和卡住的界面，先遮盖密码、密钥和机器序列号。[测试反馈表](TEST-FEEDBACK.md)

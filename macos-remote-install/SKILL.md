@@ -2,7 +2,7 @@
 name: macos-remote-install
 description: 从另一台 B 电脑远程协助 A 电脑安装或修复 OpenCore 与 macOS 双系统。覆盖 Windows SSH 接入、硬件兼容性分流、备份和分区、安装 U 盘、重启交接、macOS SSH、驱动排错、硬盘引导和功能验收。适合需要逐步进度反馈及回退记录的安装任务；不承诺所有硬件兼容，也不提供可直接套用的通用 EFI。
 metadata:
-  version: "0.2.12"
+  version: "0.2.13"
   language: zh-CN
   updated: "2026-11-05"
 ---
@@ -20,6 +20,8 @@ B 能运行 Python 时，先读 [标准流程控制器](references/00-controller
 源码升级遇到 LF／CRLF 差异时使用控制器已登记的迁移能力。以 `workflow.py status` 核对版本和阶段，旧 NEXT.md 只作线索。工具探索、临时假设和逐文件检查留在私有日志。核对完整证据后再下结论。
 
 **03 组装 EFI、04 引导故障、06 设备修复都从 [现成方案入口](references/10-existing-solutions.md) 开始。** 新建 EFI 先按 1／2／3／4 的推荐顺序让用户选择；随后在 B 运行 `python scripts/solutions.py lookup <主题> --target "<本机板型／设备ID>"`，按所选路线核对来源，由控制器 `select-source` 登记。保留生成器产物、实际案例原版或官方 Sample，再比较差异并适配。连续无效的同来源试验按控制器错误码回到有依据的来源或交接该项。
+
+**Intel Xe 分支：** 阶段 01／03／06 遇到 Iris Xe、Xe-LP 或 11 代以后的 Intel 核显时，读取 [Xe 设备分流与分阶段修复](references/14-xe-lp.md)，用物理 PCI ID 查询 WhateverXe＋Graphics。不能把所有 Intel GPU 都交给 WhateverGreen，也不能凭代际直接判无解。按版本核对依赖，WEX／WEG 不可同时生效；有后置图形组件时先告知用户，再带入 06 清单，完成真实加速测试后继续其他硬件。
 
 下载 GitHub 工具、源码或驱动时，按 [文件下载与局域网中转](references/04-installer.md) 核对实际下载端和具体资产。A 拉取失败就测 B，B 可达时由 B 校验并经 SFTP 中转；两端均失败时使用已有可信缓存或离线包，继续其他可做的检查。
 

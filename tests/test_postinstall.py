@@ -97,6 +97,27 @@ class PostInstallTests(unittest.TestCase):
         flow.record_devices(self.run, self.state, self.save_devices())
         flow.guided_review(self.run, self.state, put(self.run, 'review06.json', self.review()))
 
+    def test_scan_can_record_conflict_but_cannot_close_and_migrate_it(self):
+        path=self.run/self.data['tested_config']
+        config=plistlib.loads(path.read_bytes())
+        config['Kernel']['Add']=[{'BundlePath':n,'Enabled':True} for n in ('WhateverXe.kext','WhateverGreen.kext')]
+        path.write_bytes(plistlib.dumps(config))
+        flow.record_devices(self.run,self.state,self.save_devices())
+        with self.assertRaises(Fault) as error:
+            flow.guided_review(self.run,self.state,put(self.run,'review06.json',self.review()))
+        self.assertEqual(error.exception.code,'GPU_PATCH_CONFLICT')
+        self.assertEqual(self.state['phase'],'06-devices')
+
+    def test_graphics_gate_accepts_disabled_old_route_and_handles_invalid_plist(self):
+        path='evidence/graphics.plist'
+        put(self.run,path,plistlib.dumps({'Kernel':{'Add':[
+            {'BundlePath':'WhateverXe.kext','Enabled':True},
+            {'BundlePath':'WhateverGreen.kext','Enabled':False}]}}))
+        guard.check_graphics_config(self.run,path)
+        put(self.run,path,b'<?xml version="1.0"?><plist><dict>')
+        with self.assertRaises(Fault) as error: guard.check_graphics_config(self.run,path)
+        self.assertEqual(error.exception.code,'GPU_PATCH_CONFLICT')
+
     def test_declared_postinstall_device_cannot_disappear_or_change_identity(self):
         declared=copy.deepcopy(self.data['items'][0])
         self.state['install_expectations']={'items':[declared],'proofs':[guard.proof(self.run,'evidence/fixture.txt','TEST')]}

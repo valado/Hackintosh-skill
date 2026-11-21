@@ -1,4 +1,4 @@
-# Hackintosh-skill · v0.2.12
+# Hackintosh-skill · v0.2.13
 
 本版优先使用 1401 自动构建 EFI，RapidEFI 作为备用；安装前说明哪些功能需要装完系统后继续修复。仍处测试阶段，详见下方测试声明与验证范围。
 
@@ -11,6 +11,8 @@
 > **不同 Agent 工具、大模型、版本、上下文与工具权限的能力不同，即使读取同一份 Skill，也可能出现执行顺序、理解和排错结果的差异。** 标准流程与检查工具只能减少不确定性，不能消除 AI 误判或保证每一步均被正确执行。
 >
 > 分区、格式化、修改引导及安装驱动可能导致数据丢失或系统无法启动。请先备份重要数据并确认可恢复；涉及写盘时核对目标，保留 Windows 与可用引导的回退方式。本项目按 MIT 许可证“按现状”提供，不作明示或默示担保；请勿将尚未验证的配置直接用于唯一的工作环境。
+
+本版新增 [Intel Xe-LP 配置与验证路线](macos-remote-install/references/14-xe-lp.md)，回应 [社区反馈 #1](https://github.com/zxmls-ai/Hackintosh-skill/issues/1)：按真实设备 ID 查 WhateverXe＋Graphics，区分安装前准备和装完后的驱动修复，并检查与 WhateverGreen 的冲突。社区案例不等于所有 Xe 机器均兼容；1401 仍为首选 EFI 生成器。
 
 ## 开始前，先分清两台电脑
 
@@ -43,7 +45,7 @@
 
 第一轮会先介绍两台电脑的分工，再给一段完整命令。你在 A 粘贴运行一次，把结果发回 B。助手核对连接后，就可以自动检查硬件。已有受控任务会按保存的进度继续。
 
-想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.12 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.12.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
+想先看看助手会怎么说，可以打开[新手对话预览](新手对话预览.md)。习惯用 WorkBuddy 技能导入的用户，可以直接[下载 v0.2.13 适配包](https://github.com/zxmls-ai/Hackintosh-skill/raw/refs/heads/main/downloads/macos-remote-install-workbuddy-v0.2.13.zip)。遇到仓库访问问题时，见[新手起步](START-HERE.md)。
 
 ## 给 Agent 的入口说明
 

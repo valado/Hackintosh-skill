@@ -33,6 +33,8 @@
 
 ## Agent 的固定记录
 
+**Xe-LP 也按同一份清单交接。** 对已核对适用 WhateverXe＋Graphics 的机器，说明 EFI 插件与 macOS 内图形组件的区别，登记安装时可能无完整加速和 06 的补装／验证任务。采用 [Xe 专用分支](14-xe-lp.md)，不把其完整介质 AutoPkg 方法套在联网恢复 U 盘。唯一显示输出不可用时先解决安装阻塞，不能延后。
+
 阶段 03 review 的 `checks.installation_expectations` 必须为 `pass`，`manifest` 指向相对私有 run 的 `install-expectations-v1` 文件。校验引用文件及本机身份，把说明绑定到本次实际安装配置。控制器验证结构和字节；说明是否真实、安装条件是否成立仍由 Agent 依据原始证据核对。
 
 ```json

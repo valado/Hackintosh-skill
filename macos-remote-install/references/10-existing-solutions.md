@@ -38,6 +38,7 @@
 |---|---|---|
 | 新建安装 EFI | [1401 命令行（首选）](12-1401.md)、[RapidEFI 自动配置（备用）](https://github.com/JeoJay127/RapidEFI-Tool) 或 [OpCore Simplify](https://github.com/lzhoang2801/OpCore-Simplify) 的硬件报告工作流 | A 的报告、原始 ACPI、生成器版本、未修改的 EFI 及配置。RapidEFI 如导出 configModel 一并保留。 |
 | ACPI、USB | [SSDTTime](https://github.com/corpnewt/SSDTTime)、[USBToolBox](https://github.com/USBToolBox/tool) | 从 A 原始表生成的 AML 和配套重命名、实际插孔的发现记录及映射。分别核对作用域、匹配和启用状态。 |
+| Intel Xe-LP 图形 | [WhateverXe＋Graphics](14-xe-lp.md)，lookup 识别物理 PCI ID | 分别保存 EFI 插件、系统内组件与依赖的版本证据；记录实际输出和 Metal 计算结果，不把社区 EFI 整套复制。 |
 | GPU、有线、无线或音频 | 用下方 lookup 按问题找原项目，再按设备 ID 深查。工具目录可补充其他已维护分支及作者给出的具体修复。 | 锁定的驱动、依赖、证据、回退包；最终包与实际加载位置都要核对。 |
 
 ### RapidEFI 的固定操作与自动化

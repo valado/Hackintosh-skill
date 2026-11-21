@@ -37,6 +37,34 @@ class EfiAuditTests(unittest.TestCase):
     def save(self):
         (self.efi / 'OC/config.plist').write_bytes(plistlib.dumps(self.config))
 
+    def graphics_pair(self):
+        return [{'BundlePath': name, 'Enabled': True, 'Arch': 'x86_64', 'MinKernel': '', 'MaxKernel': ''}
+                for name in ('WhateverXe.kext', 'WhateverGreen.kext')]
+
+    def test_overlapping_graphics_plugins_are_reported_without_claiming_loaded(self):
+        self.config['Kernel']['Add'] = self.graphics_pair(); self.save()
+        before=ea.snapshot(self.efi)
+        report=ea.audit(self.efi)
+        finding=report['current']['graphics_conflicts'][0]
+        self.assertEqual(finding['code'],'GPU_PATCH_CONFLICT')
+        self.assertEqual(finding['runtime_loaded'],'unknown')
+        self.assertFalse(report['current']['boot_verified'])
+        self.assertEqual(before,ea.snapshot(self.efi))
+
+    def test_disabled_or_disjoint_graphics_plugins_do_not_conflict(self):
+        for change in ({'Enabled':False},{'MinKernel':'26.0.0'},{'Arch':'i386'}):
+            with self.subTest(change=change):
+                rows=self.graphics_pair();rows[0]['MaxKernel']='25.99.99';rows[1].update(change)
+                self.assertEqual(ea.graphics_conflicts({'Kernel':{'Add':rows}}),[])
+
+    def test_touching_kernel_ranges_and_unknown_conditions_require_review(self):
+        rows=self.graphics_pair();rows[0]['MaxKernel']='25.0.0';rows[1]['MinKernel']='25.0.0'
+        self.assertEqual(ea.graphics_conflicts({'Kernel':{'Add':rows}})[0]['overlap'],'possible')
+        for change in ({'MinKernel':'future'},{'MinKernel':'26','MaxKernel':'25'},{'Arch':'invalid'}):
+            with self.subTest(change=change):
+                pair=copy.deepcopy(rows);pair[1].update(change)
+                self.assertEqual(ea.graphics_conflicts({'Kernel':{'Add':pair}})[0]['overlap'],'needs-review')
+
     def test_disabled_is_not_enabled_or_loaded(self):
         row = ea.audit(self.efi)['current']['entries'][0]
         self.assertEqual(row['status'], 'disabled')

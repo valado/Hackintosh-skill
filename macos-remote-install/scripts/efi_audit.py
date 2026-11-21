@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import plistlib
+import re
 import sys
 
 from agentkit import confined, files, no_link, sha, utc, write_new
@@ -14,6 +15,42 @@ LISTS = (('ACPI', 'Add', 'Path', 'OC/ACPI/'),
          ('Kernel', 'Add', 'BundlePath', 'OC/Kexts/'),
          ('Kernel', 'Block', None, None), ('Kernel', 'Patch', None, None),
          ('UEFI', 'Drivers', 'Path', 'OC/Drivers/'))
+
+
+def graphics_conflicts(config):
+    """Known bundle names only. Static possible overlap, never runtime detection."""
+    groups = {'whateverxe.kext': [], 'whatevergreen.kext': []}
+    for index, row in enumerate(config.get('Kernel', {}).get('Add', [])):
+        name = str(row.get('BundlePath', '')).replace('\\', '/').rsplit('/', 1)[-1].casefold()
+        if row.get('Enabled') is True and name in groups:
+            groups[name].append((index, row))
+
+    def bound(value, maximum=False):
+        if value in ('', None):
+            return (999999, 999999, 999999) if maximum else (0, 0, 0)
+        if not isinstance(value, str) or not re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,2}', value):
+            return None
+        parts = tuple(int(n) for n in value.split('.'))
+        return parts + (0,) * (3 - len(parts))
+
+    findings = []
+    for xi, xe in groups['whateverxe.kext']:
+        for gi, green in groups['whatevergreen.kext']:
+            arches = (xe.get('Arch', 'Any'), green.get('Arch', 'Any'))
+            if set(arches) == {'i386', 'x86_64'}:
+                continue
+            limits = [bound(row.get(key), key == 'MaxKernel') for row in (xe, green) for key in ('MinKernel', 'MaxKernel')]
+            unknown = None in limits or any(a not in ('Any', '', 'i386', 'x86_64') for a in arches)
+            if not unknown:
+                xl, xh, gl, gh = limits
+                unknown = xl > xh or gl > gh
+                if not unknown and max(xl, gl) > min(xh, gh):
+                    continue
+            findings.append({'code': 'GPU_PATCH_CONFLICT', 'entries': [xi, gi],
+                             'overlap': 'needs-review' if unknown else 'possible',
+                             'reason': 'WhateverXe and WhateverGreen must not be effective together',
+                             'runtime_loaded': 'unknown'})
+    return findings
 
 
 def snapshot(root):
@@ -107,6 +144,7 @@ def inventory(root):
         raise ValueError('EFI changed during inspection; copy a stable snapshot and retry')
     report = {'config_sha256': manifest['OC/config.plist']['sha256'],
               'files': manifest, 'entries': entries,
+              'graphics_conflicts': graphics_conflicts(config),
               'picker_mode': config.get('Misc', {}).get('Boot', {}).get('PickerMode'),
               'oc_version': 'not-inferred', 'boot_verified': False}
     return report, config

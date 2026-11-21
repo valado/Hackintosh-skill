@@ -45,9 +45,34 @@ class SolutionTests(unittest.TestCase):
     def test_hardware_routing_returns_project_and_usable_template(self):
         self.assertIn('stefb69', self.plan['candidates'][1]['source'])
         self.assertEqual(solutions.lookup('efi','fixture')['cards'][0]['source'],'https://github.com/nullmoth/1401')
-        self.assertIn('WhateverGreen', solutions.lookup('gpu','1002:fixture')['cards'][0]['source'])
+        self.assertIn('WhateverGreen', solutions.lookup('gpu','1002:73bf')['cards'][0]['source'])
         self.assertIn('USBToolBox', solutions.lookup('usb','fixture')['cards'][0]['source'])
         self.assertEqual(solutions.assess(self.run,self.path)['kind'], 'project')
+
+    def test_xe_physical_ids_and_windows_format_select_paired_projects(self):
+        for target in ('8086:A7A0', 'Iris Xe 8086:a7a0 rev 04', r'PCI\VEN_8086&DEV_A7A0&SUBSYS_00000000', 'pci\\ven_8086&dev_a7a0'):
+            with self.subTest(target=target):
+                result = solutions.lookup('gpu', target)
+                self.assertEqual([c['source'].split('/')[-1] for c in result['cards'][:2]], ['WhateverXe', 'WhateverXe-Graphics'])
+                self.assertEqual(result['routing']['status'], 'xe-lp-candidate')
+                self.assertEqual(result['routing']['physical_ids'], ['8086:a7a0'])
+                self.assertTrue(all(c['status'] == 'unchecked' for c in result['template']['candidates']))
+
+    def test_xe_backend_snapshot_does_not_cover_neighbour_or_new_architectures(self):
+        for target in ('8086:9A49', '8086:46D4', '8086:A7AD', '8086:4680', '8086:A78B'):
+            self.assertEqual(solutions.lookup('gpu',target)['routing']['status'],'xe-lp-candidate')
+        for target in ('8086:46D5', '8086:4C8A', '8086:7D55', '8086:56A0', '8086:FFFF', 'Iris Xe', 'i7-1370P', '8086:A7A00'):
+            with self.subTest(target=target):
+                result=solutions.lookup('gpu',target)
+                self.assertEqual(result['routing']['status'],'needs-upstream-review')
+                self.assertEqual(result['routing']['xe_backend_matches'],[])
+
+    def test_gpu_lookup_preserves_legacy_and_nvidia_routes_and_global_cards(self):
+        before=copy.deepcopy(solutions.CARDS)
+        solutions.lookup('gpu','8086:A7A0')
+        for target, project in [('8086:5912','WhateverGreen'),('1002:73BF','WhateverGreen'),('10DE:2705','nvidia-macos-driver')]:
+            self.assertTrue(solutions.lookup('gpu',target)['cards'][0]['source'].endswith('/'+project))
+        self.assertEqual(solutions.CARDS,before)
 
     def test_unreviewed_baseline_blocks_project_and_matched_baseline_wins(self):
         row = self.plan['candidates'][0]

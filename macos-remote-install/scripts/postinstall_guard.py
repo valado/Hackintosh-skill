@@ -6,9 +6,11 @@ rows, enumeration-only success and copy-only boot handoffs, not dishonest report
 import plistlib
 import re
 import uuid
+from xml.parsers.expat import ExpatError
 
 from agentkit import confined, read_json, sha
 from ssh_transport import Fault
+from efi_audit import graphics_conflicts
 from urllib.parse import urlsplit
 
 CATEGORIES = ('network', 'gpu', 'wifi', 'bluetooth', 'usb', 'audio', 'storage',
@@ -85,6 +87,7 @@ def check_install_expectations(run, machine, path, config_path):
     actual = proof(run, config_path, code)
     need(config['sha256'] == actual['sha256'], code, 'notice is for a different installation config')
     proofs.extend([config, actual])
+    check_graphics_config(run, config_path)
     for field in ('assessment','presented','install_network','install_display','install_input','install_storage'):
         proofs.append(proof(run, data.get(field), code))
     need(data.get('blocking_items') == [], code, 'resolve installation blockers before deferring devices')
@@ -100,6 +103,15 @@ def check_install_expectations(run, machine, path, config_path):
         need(url.scheme == 'https' and bool(url.hostname) and not url.username and not url.password,code,'original driver/project reference required')
         proofs.append(proof(run, row.get('evidence'), code))
     return data, proofs
+
+
+def check_graphics_config(run, path):
+    try:
+        config = plistlib.loads(confined(run, path).read_bytes())
+        conflicts = graphics_conflicts(config)
+    except (OSError, ValueError, TypeError, AttributeError, ExpatError):
+        raise Fault('GPU_PATCH_CONFLICT', {'reason': 'cannot inspect graphics configuration'}) from None
+    need(not conflicts, 'GPU_PATCH_CONFLICT', 'resolve WhateverXe / WhateverGreen overlap before boot or final acceptance')
 
 
 def check_expectations_carried(data, expected):
@@ -194,6 +206,7 @@ def check_devices(run, machine, path, previous=None, closing=False):
             need(all(old[key][field] == new[key][field] for field in ('category', 'hardware_id')),
                  code, 'device identity cannot be relabelled')
     if closing:
+        check_graphics_config(run, data['tested_config'])
         pending = [i['id'] for i in items if i['status'] not in CLOSED]
         need(not pending, 'DEVICE_AUDIT_OPEN', 'unresolved items: ' + ', '.join(pending))
     return data, proofs

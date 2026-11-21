@@ -35,6 +35,16 @@ class ACPIGuardTests(unittest.TestCase):
     def ref(self,path): return {'path':self.rel(path),'sha256':sha(path)['sha256']}
     def write_manifest(self):
         path=self.put('inventory/acpi/collection.json',json.dumps(self.manifest).encode());return self.rel(path)
+
+    def test_media_handoff_rejects_overlapping_xe_and_green_even_with_acpi_evidence(self):
+        config=plistlib.loads(self.config.read_bytes())
+        config['Kernel']={'Add':[{'BundlePath':n,'Enabled':True} for n in ('WhateverXe.kext','WhateverGreen.kext')]}
+        self.config.write_bytes(plistlib.dumps(config));self.manifest['config']=self.ref(self.config)
+        report=self.review()
+        with self.assertRaises(Fault) as error: flow.guided_review(self.run,self.state,report)
+        self.assertEqual(error.exception.code,'GPU_PATCH_CONFLICT')
+        self.assertEqual(self.state['phase'],'03-media')
+
     def review(self,include_acpi=True):
         checks={key:{'result':'pass','basis':'tool','evidence':[self.rel(self.capture)]} for key in flow.PHASES['03-media']['verification']}
         if include_acpi: checks['acpi_tables']['manifest']=self.write_manifest()

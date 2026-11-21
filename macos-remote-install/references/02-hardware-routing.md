@@ -20,7 +20,8 @@ CPU 厂商／型号／架构／核心线程、主板与 BIOS、UEFI 或 Legacy�
 | Intel 台式机 | 按 CPU 代际、芯片组和目标系统选择 ACPI、CPU 识别、电源管理、核显方案；混合架构不能直接照搬旧代际参数 |
 | AMD 台式机 | 读取 AMD-OSX 当前内核补丁说明，核对 OS 内核范围与核心数相关参数；明确软件兼容性限制，不能套 Intel CPU 补丁 |
 | Intel／AMD 笔记本 | CPU 路线以外，必须确认屏幕布线、核显、独显切换和输入设备；无可驱动的显示输出时先停止安装路线 |
-| Intel／AMD 显卡 | 对照精确设备 ID 与 OS 支持，选择原生驱动／适配补丁；同系列命名不代表全部支持 |
+| Intel 传统核显／AMD 显卡 | 对照精确设备 ID 与 OS 支持，选择原生驱动／适配补丁；WhateverGreen 不提供所有新 Intel GPU 的底层驱动 |
+| Intel Xe-LP 候选 | 按物理 PCI ID 查 [WhateverXe＋Graphics 分支](14-xe-lp.md)，含反馈的 8086:A7A0；后端覆盖、社区案例和本轮实测分开，不能套到所有 Xe／Arc 架构 |
 | 新 NVIDIA 路线 | 先看 NullMoth 的 README、CARD-SUPPORT、版本说明与已知问题。支持列表和实机验收分开；不可套用旧 Web Driver，也不能承诺所有 RTX 笔记本内屏可用 |
 | Wi-Fi／蓝牙 | 区分 Wi-Fi PCI 功能与蓝牙 USB 功能，核对系统版本、所需依赖和接力限制；保留一条已验证的网络通道 |
 | NVMe／SATA／VMD／RAID | 确认安装盘可由 macOS 访问；切换 BIOS 存储模式可能破坏现有 Windows 启动，须先设计 Windows 适配与回退 |

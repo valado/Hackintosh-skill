@@ -19,7 +19,7 @@ from acpi_guard import check_acpi_evidence
 from solutions import assess as assess_solution
 from postinstall_guard import check_devices, device_queue, check_boot, check_recovery, check_install_expectations, check_expectations_carried
 
-VERSION = '0.2.12'
+VERSION = '0.2.13'
 ROOT = Path(__file__).resolve().parent
 CONTRACT_PATH = ROOT.parent / 'workflow.json'
 UPGRADE_PATH = ROOT.parent / 'upgrades.json'
@@ -29,6 +29,7 @@ TRACKED = ['workflow.py','ssh_transport.py','probe-windows.ps1','enable-windows-
 
 # code -> summary, diagnostic action, human input, fixed resume action
 ERRORS = {
+    'GPU_PATCH_CONFLICT': ('图形配置有冲突或启用条件尚未查清。','我会按设备 ID 核对 WhateverXe 与 WhateverGreen，保留适配路线后重新校验。','暂时不要重启；其他设备的独立检查可继续。','review'),
     'INSTALL_EXPECTATIONS_REQUIRED': ('EFI 已制作，但安装前的功能说明还没完整核对。','我会区分安装必需项和装完后再修的项目，告知预期现象并带入硬件清单。','暂时无需操作；若缺少唯一安装网口等必要条件，我会说明替代办法。','review'),
     'DEVICE_RECOVERY_REQUIRED': ('硬件检查可继续，修改驱动前还需备好恢复办法。','我会保存可启动 EFI，核对 Windows 远程入口与这次修改的回滚方法。','若重启后进不去 macOS，从主板启动菜单选 Windows Boot Manager；发回卡住的照片和 Windows 当前 IP。','record-devices'),
     'DEVICE_AUDIT_REQUIRED': ('还没完成本轮全机检查清单。','我会对照安装前的硬件，补查每件设备和系统功能。','暂时无需操作。','record-devices'),
@@ -235,7 +236,7 @@ def upgrade(run,state):
         state['guided_reviews']=[r for r in reviews if r['phase']!='03-media']
         state.update(phase='03-media',step='guided-contract',status='planned',failure=None)
     # Old 06/07 reviews did not enforce a per-device ledger or firmware receipt.
-    if previous not in ('0.2.10','0.2.11') and state['phase'] in ('07-boot', '08-delivery'):
+    if previous not in ('0.2.10','0.2.11','0.2.12') and state['phase'] in ('07-boot', '08-delivery'):
         state.setdefault('superseded_guided_reviews', []).extend(
             r for r in state.get('guided_reviews', []) if r['phase'] in ('06-devices', '07-boot', '08-delivery'))
         state['guided_reviews'] = [r for r in state.get('guided_reviews', []) if r['phase'] not in ('06-devices', '07-boot', '08-delivery')]

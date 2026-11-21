@@ -29,6 +29,9 @@
 
 ## 驱动与排错
 
+- [WhateverXe](https://github.com/b00t0x/WhateverXe)、[设备选择](https://github.com/b00t0x/WhateverXe/blob/main/docs/device-selection.md)、[WhateverXe-Graphics](https://github.com/b00t0x/WhateverXe-Graphics)、[AMFIAnchor](https://github.com/b00t0x/AMFIAnchor)：2026-11-21 核对部分 Xe-LP 路线，版本基准、文档差异及社区案例边界见 [14-Xe](14-xe-lp.md)。
+- [VoodooHDA](https://github.com/CloverHackyColor/VoodooHDA/blob/main/readme.md)：按所选版本区分 EFI 注入与系统内安装，不把旧案例的依赖当固定要求。
+
 - [Dortania 内核启动问题分类](https://dortania.github.io/OpenCore-Install-Guide/troubleshooting/extended/kernel-issues.html)：按证据选择分支，不将最后一行当唯一根因。
 - [Dortania kext 适用条件](https://dortania.github.io/OpenCore-Install-Guide/ktext.html#extras)：2026-10-30 复核 AppleMCEReporterDisabler 的 AMD／双路 Intel 条件，不能扩成所有非 Xeon 必装。
 - [Acidanthera 项目](https://github.com/acidanthera)：在各项目仓库核对 Lilu、VirtualSMC、图形、音频等依赖及发布，不从未知整合包混装。

@@ -81,6 +81,18 @@ class SourceIdentityTests(unittest.TestCase):
                 self.assertEqual(current['version'],flow.VERSION)
                 self.assertIn('efi_audit.py',current['sources'])
 
+    def test_0212_upgrade_preserves_recent_stage_and_efi_choice(self):
+        profile=flow.read_json(flow.UPGRADE_PATH)['from']['0.2.12']
+        for phase in ('03-media','06-devices','07-boot'):
+            with self.subTest(phase=phase):
+                run=self.root/phase;state=flow.initialize(run)
+                state.update(version='0.2.12',sources=copy.deepcopy(profile['sources']),phase=phase,step='guided-contract',efi_choice='d')
+                flow.save(run,state,'synthetic-old-task');flow.upgrade(run,state)
+                current=flow.load(run)
+                self.assertEqual(current['phase'],phase)
+                self.assertEqual(current['efi_choice'],'d')
+                self.assertEqual(current['sources'],flow.source_lock())
+
     def test_earlier_local_candidate_can_resume_the_same_step(self):
         profile = flow.read_json(flow.UPGRADE_PATH)['from']['0.2.8']
         old_sources = copy.deepcopy(profile['sources'])

@@ -1,5 +1,7 @@
 # 00 准备工作和远程接入 · 流程控制器参考
 
+v0.2.13 的 `GPU_PATCH_CONFLICT` 表示已启用的 WhateverXe／WhateverGreen 存在可能重叠，或相关配置无法检查。阶段 03 安装交接和 06 封口均阻止推进；核对 [Xe 分支](14-xe-lp.md)，保存原配置、按选定路线消除冲突后重新校验并提交新证据。可继续不依赖显卡的只读检查，不能删除设备行绕过。静态检查不等于真实加载或功能成功。
+
 v0.2.12 新任务进入阶段 03 时会返回 `next_action=choose-efi` 和 1 · 1401（首选）、2 · RapidEFI（备用）、3 · 相似配置、4 · AI 自行配置（前三种均不可用）。展示后，依据回复或用户“按推荐”执行 `python scripts/workflow.py --run "任务目录" --json choose-efi --choice 1`（或 2、3、4；内部 ID 仍为 d/a/b/c），再按新的 `next_action` 查来源并登记。首次 `select-source` 缺少选择时返回 `EFI_ROUTE_REQUIRED`。既有任务已登记 EFI 来源时保留原路线继续，避免升级中途重复提问或重做产物。各路线的来源字段见 [现成方案入口](10-existing-solutions.md)。
 
 ## 定位与实际覆盖
